@@ -5,9 +5,17 @@ name: PR Labeler
 # Uses pull_request_target so it runs from the base branch and has the write
 # access needed to apply labels — including on fork PRs. It never checks out PR
 # code, only reads the title as data, so there is no injection surface.
+# TEMPORARILY DISABLED. No automatic triggers - nothing runs on push, PR or tag.
+# A run can still be started by hand from the Actions tab.
+#
+# To re-enable, replace the `on:` block below with:
+#
+#   on:
+#     pull_request_target:
+#       types: [ opened, edited, synchronize, reopened ]
+#
 on:
-  pull_request_target:
-    types: [ opened, edited, synchronize, reopened ]
+  workflow_dispatch:
 
 permissions:
   contents: read

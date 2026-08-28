@@ -3,9 +3,17 @@ name: PR Conventions
 # Validates that PR titles follow Conventional Commits.
 # With squash-merge set to use the PR title, this keeps main's history clean.
 # Uses pull_request (read-only) so it is safe for fork PRs.
+# TEMPORARILY DISABLED. No automatic triggers - nothing runs on push, PR or tag.
+# A run can still be started by hand from the Actions tab.
+#
+# To re-enable, replace the `on:` block below with:
+#
+#   on:
+#     pull_request:
+#       types: [ opened, edited, synchronize, reopened ]
+#
 on:
-  pull_request:
-    types: [ opened, edited, synchronize, reopened ]
+  workflow_dispatch:
 
 permissions:
   contents: read
