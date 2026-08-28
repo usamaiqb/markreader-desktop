@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="34" viewBox="0 0 180 34" role="img" aria-label="MarkReader: ported">
+	<rect width="180" height="34" rx="5" fill="#0078d4" />
+	<rect x="112" width="68" height="34" rx="5" fill="#2b8a3e" />
+	<rect x="112" width="10" height="34" fill="#2b8a3e" />
+	<g font-family="Segoe UI, system-ui, sans-serif" font-size="13" fill="#ffffff">
+		<text x="14" y="22">MarkReader</text>
+		<text x="124" y="22">ported</text>
+	</g>
+</svg>

@@ -1,0 +1,542 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Copyright (c) 2026 DigiGate */
+
+/*---------------------------------------------------------------------------------------------
+ *  MarkReader application chrome.
+ *
+ *  Loaded after markdown.css so it can override it. The document itself stays in <body> —
+ *  which keeps VS Code's `html, body` typography and padding rules meaningful — while the
+ *  toolbar, sidebar and outline are position:fixed so they sit outside that flow.
+ *--------------------------------------------------------------------------------------------*/
+
+:root {
+	--mr-toolbar-height: 38px;
+	--mr-sidebar-width: 260px;
+	--mr-outline-width: 240px;
+}
+
+html {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	min-height: 100%;
+	/* markdown.css sets `padding: 0 26px` then `padding-top: 1em`; make room for the toolbar. */
+	padding-top: calc(var(--mr-toolbar-height) + 1em);
+	transition: margin 0.12s ease;
+	-webkit-font-smoothing: antialiased;
+}
+
+body.has-sidebar {
+	margin-left: var(--mr-sidebar-width);
+}
+
+body.has-outline {
+	margin-right: var(--mr-outline-width);
+}
+
+/* ------------------------------------------------------------------------ toolbar */
+
+#toolbar {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	height: var(--mr-toolbar-height);
+	padding: 0 8px;
+	box-sizing: border-box;
+	background: var(--mr-sidebar-background);
+	border-bottom: 1px solid var(--mr-chrome-border);
+	font-size: 12px;
+	user-select: none;
+	-webkit-app-region: drag;
+}
+
+#toolbar > * {
+	-webkit-app-region: no-drag;
+}
+
+.mr-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	min-width: 28px;
+	height: 26px;
+	padding: 0 8px;
+	border: 1px solid transparent;
+	border-radius: 5px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.mr-button:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+.mr-button:active {
+	background: var(--vscode-toolbar-activeBackground);
+}
+
+.mr-button.checked {
+	background: var(--vscode-toolbar-activeBackground);
+}
+
+.mr-button:focus-visible {
+	outline: 1px solid var(--mr-focus-border);
+	outline-offset: -1px;
+}
+
+.mr-icon {
+	width: 16px;
+	height: 16px;
+	flex: none;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+#doc-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: center;
+	opacity: 0.85;
+	padding: 0 8px;
+}
+
+#doc-title .dirname {
+	color: var(--mr-description-foreground);
+}
+
+.mr-spacer {
+	width: 1px;
+	height: 16px;
+	margin: 0 4px;
+	background: var(--mr-chrome-border);
+	flex: none;
+}
+
+/* ------------------------------------------------------------- sidebar & outline */
+
+#sidebar,
+#outline {
+	position: fixed;
+	top: var(--mr-toolbar-height);
+	bottom: 0;
+	z-index: 15;
+	display: none;
+	flex-direction: column;
+	background: var(--mr-sidebar-background);
+	color: var(--mr-sidebar-foreground);
+	font-size: 13px;
+	overflow: hidden;
+}
+
+#sidebar {
+	left: 0;
+	width: var(--mr-sidebar-width);
+	border-right: 1px solid var(--mr-chrome-border);
+}
+
+#outline {
+	right: 0;
+	width: var(--mr-outline-width);
+	border-left: 1px solid var(--mr-chrome-border);
+}
+
+body.has-sidebar #sidebar,
+body.has-outline #outline {
+	display: flex;
+}
+
+.pane-header {
+	flex: none;
+	padding: 9px 12px 7px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--mr-description-foreground);
+	user-select: none;
+}
+
+.pane-body {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding-bottom: 12px;
+}
+
+.pane-empty {
+	padding: 4px 12px 12px;
+	color: var(--mr-description-foreground);
+	line-height: 1.5;
+}
+
+/* File list */
+
+#file-filter {
+	flex: none;
+	margin: 0 8px 8px;
+	padding: 4px 8px;
+	border: 1px solid var(--mr-chrome-border);
+	border-radius: 4px;
+	background: var(--vscode-editor-background);
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+}
+
+#file-filter:focus {
+	outline: 1px solid var(--mr-focus-border);
+	outline-offset: -1px;
+}
+
+.file-entry {
+	display: block;
+	width: 100%;
+	padding: 3px 12px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	direction: rtl; /* keep the filename visible when the path overflows */
+}
+
+.file-entry > span {
+	direction: ltr;
+	unicode-bidi: embed;
+}
+
+.file-entry:hover {
+	background: var(--mr-list-hoverBackground);
+}
+
+.file-entry.active {
+	background: var(--mr-list-activeBackground);
+	color: var(--mr-list-activeForeground);
+}
+
+.file-entry .file-dir {
+	color: var(--mr-description-foreground);
+}
+
+.file-entry.active .file-dir {
+	color: inherit;
+	opacity: 0.75;
+}
+
+/* Outline */
+
+.toc-entry {
+	display: block;
+	width: 100%;
+	padding: 2px 12px;
+	border: 0;
+	border-left: 2px solid transparent;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12.5px;
+	line-height: 1.6;
+	text-align: left;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.toc-entry:hover {
+	background: var(--mr-list-hoverBackground);
+}
+
+.toc-entry.active {
+	border-left-color: var(--mr-focus-border);
+	background: var(--mr-list-hoverBackground);
+}
+
+.toc-entry[data-level="1"] { padding-left: 12px; font-weight: 600; }
+.toc-entry[data-level="2"] { padding-left: 24px; }
+.toc-entry[data-level="3"] { padding-left: 36px; }
+.toc-entry[data-level="4"] { padding-left: 48px; opacity: 0.9; }
+.toc-entry[data-level="5"] { padding-left: 60px; opacity: 0.85; }
+.toc-entry[data-level="6"] { padding-left: 72px; opacity: 0.8; }
+
+/* ------------------------------------------------------------------- document */
+
+#content {
+	max-width: 980px;
+	margin: 0 auto;
+}
+
+body.full-width #content {
+	max-width: none;
+}
+
+/* Heading anchor links, in the style of the GitHub / docs convention. */
+.markdown-body :is(h1, h2, h3, h4, h5, h6) {
+	position: relative;
+}
+
+.heading-anchor {
+	position: absolute;
+	left: -0.85em;
+	width: 0.85em;
+	opacity: 0;
+	text-decoration: none;
+	color: var(--mr-description-foreground);
+	font-weight: 400;
+	cursor: pointer;
+}
+
+.markdown-body :is(h1, h2, h3, h4, h5, h6):hover > .heading-anchor {
+	opacity: 1;
+}
+
+.heading-anchor:hover {
+	text-decoration: none;
+	color: var(--vscode-textLink-foreground);
+}
+
+/* Briefly flash a heading that was jumped to, so the target is obvious. */
+@keyframes mr-target-flash {
+	from { background-color: var(--mr-list-activeBackground); }
+	to { background-color: transparent; }
+}
+
+.mr-target-flash {
+	animation: mr-target-flash 1.2s ease-out;
+	border-radius: 3px;
+}
+
+/* Empty state */
+
+#empty-state {
+	display: none;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 14px;
+	min-height: 60vh;
+	color: var(--mr-description-foreground);
+	text-align: center;
+	user-select: none;
+}
+
+body.no-document #empty-state {
+	display: flex;
+}
+
+body.no-document #content {
+	display: none;
+}
+
+#empty-state .empty-title {
+	font-size: 17px;
+	color: var(--vscode-editor-foreground);
+}
+
+#empty-state kbd {
+	padding: 1px 5px;
+	border: 1px solid var(--mr-chrome-border);
+	border-bottom-width: 2px;
+	border-radius: 4px;
+	background: var(--vscode-textCodeBlock-background);
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.9em;
+}
+
+#empty-state .empty-actions {
+	display: flex;
+	gap: 8px;
+}
+
+#empty-state .mr-button {
+	border-color: var(--mr-chrome-border);
+	height: 30px;
+	padding: 0 14px;
+}
+
+/* Drag & drop */
+
+body.drag-over::after {
+	content: "";
+	position: fixed;
+	inset: var(--mr-toolbar-height) 0 0 0;
+	z-index: 40;
+	border: 2px dashed var(--mr-focus-border);
+	background: color-mix(in srgb, var(--mr-focus-border) 8%, transparent);
+	pointer-events: none;
+}
+
+/* --------------------------------------------------------------------- find bar */
+
+#find-bar {
+	position: fixed;
+	top: calc(var(--mr-toolbar-height) + 8px);
+	right: 18px;
+	z-index: 30;
+	display: none;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 6px;
+	background: var(--mr-sidebar-background);
+	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+	font-size: 12px;
+}
+
+body.has-outline #find-bar {
+	right: calc(var(--mr-outline-width) + 18px);
+}
+
+body.finding #find-bar {
+	display: flex;
+}
+
+#find-input {
+	width: 190px;
+	padding: 3px 7px;
+	border: 1px solid var(--mr-chrome-border);
+	border-radius: 4px;
+	background: var(--vscode-editor-background);
+	color: inherit;
+	font: inherit;
+}
+
+#find-input:focus {
+	outline: 1px solid var(--mr-focus-border);
+	outline-offset: -1px;
+}
+
+#find-count {
+	min-width: 62px;
+	text-align: center;
+	color: var(--mr-description-foreground);
+	font-variant-numeric: tabular-nums;
+}
+
+::highlight(mr-find-match) {
+	background-color: rgba(234, 92, 0, 0.33);
+}
+
+::highlight(mr-find-current) {
+	background-color: rgba(234, 92, 0, 0.8);
+	color: #ffffff;
+}
+
+/* ---------------------------------------------------------------------- mermaid */
+
+.mermaid-block {
+	margin: 0 0 16px;
+	padding: 12px;
+	border: 1px solid var(--vscode-widget-border);
+	border-radius: 4px;
+	background: var(--vscode-textCodeBlock-background);
+	overflow-x: auto;
+	text-align: center;
+}
+
+.mermaid-block > svg {
+	max-width: 100%;
+	height: auto;
+}
+
+/* Shown until mermaid has rendered, and kept if the diagram fails to parse. */
+.mermaid-block > .mermaid-fallback {
+	margin: 0;
+	border: 0;
+	background: transparent;
+	text-align: left;
+	white-space: pre-wrap;
+}
+
+.mermaid-block.rendered > .mermaid-fallback {
+	display: none;
+}
+
+.mermaid-block.failed {
+	border-color: var(--vscode-editorError-foreground);
+}
+
+.mermaid-block .mermaid-error {
+	margin-bottom: 6px;
+	color: var(--vscode-editorError-foreground);
+	text-align: left;
+	font-size: 0.9em;
+}
+
+/* ------------------------------------------------------------------------ katex */
+
+.katex-display {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 2px 0;
+}
+
+.katex {
+	/* Inherit the document text color rather than KaTeX's own default. */
+	color: inherit;
+}
+
+.katex-error {
+	color: var(--vscode-editorError-foreground);
+}
+
+/* Task lists, which markdown-it emits as plain checkbox inputs. */
+.markdown-body input[type="checkbox"] {
+	margin: 0 0.35em 0.15em 0;
+	vertical-align: middle;
+}
+
+.markdown-body li:has(> input[type="checkbox"]) {
+	list-style: none;
+	margin-left: -1.15em;
+}
+
+/* Tables scroll rather than forcing the page to scroll horizontally. */
+.markdown-body .table-wrapper {
+	overflow-x: auto;
+	margin-bottom: 0.7em;
+}
+
+.markdown-body .table-wrapper > table {
+	margin-bottom: 0;
+}
+
+@media print {
+	#toolbar,
+	#sidebar,
+	#outline,
+	#find-bar,
+	.heading-anchor,
+	.code-block-copy-button {
+		display: none !important;
+	}
+
+	body {
+		margin: 0 !important;
+		padding-top: 0 !important;
+	}
+}

@@ -1,0 +1,51 @@
+{
+	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+	"productName": "MarkReader",
+	"version": "0.1.0",
+	"identifier": "com.markreader.app",
+	"build": {
+		"frontendDist": "../out/renderer",
+		"beforeDevCommand": "npm run build",
+		"beforeBuildCommand": "npm run build:prod"
+	},
+	"app": {
+		"withGlobalTauri": false,
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": ["nsis", "deb", "appimage"],
+		"publisher": "DigiGate",
+		"copyright": "Copyright (C) 2025 DigiGate",
+		"category": "Utility",
+		"shortDescription": "Markdown reader",
+		"longDescription": "A standalone Markdown reader built from VS Code's Markdown preview.",
+		"license": "GPL-3.0-only",
+		"licenseFile": "../LICENSE",
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"fileAssociations": [
+			{
+				"ext": ["md", "markdown"],
+				"name": "Markdown Document",
+				"description": "Markdown Document",
+				"mimeType": "text/markdown",
+				"role": "Viewer"
+			}
+		],
+		"windows": {
+			"nsis": {
+				"installMode": "currentUser",
+				"compression": "lzma",
+				"languages": ["English"]
+			}
+		}
+	}
+}

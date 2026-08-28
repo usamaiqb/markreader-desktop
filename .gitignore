@@ -1,0 +1,12 @@
+node_modules/
+out/
+dist/
+test/screenshots/
+*.log
+.DS_Store
+Thumbs.db
+src-tauri/target/
+src-tauri/gen/
+src-tauri/.cargo/
+test/tmp/
+local/

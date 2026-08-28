@@ -1,0 +1,397 @@
+/*---------------------------------------------------------------------------------------------
+ *  SPDX-License-Identifier: GPL-3.0-only
+ *  SPDX-FileCopyrightText: 2026 DigiGate
+ *  SPDX-FileCopyrightText: Microsoft Corporation — MIT, see licenses/vscode.txt
+ *
+ *  Contains code derived from Visual Studio Code. See licenses/NOTICE.md for what this file
+ *  derives from and how much it changed.
+ *--------------------------------------------------------------------------------------------*/
+// Ported from vscode/extensions/markdown-language-features/src/markdownEngine.ts
+//
+// The five VS Code couplings that were cut:
+//   1. `vscode.Uri`                              -> plain absolute path strings
+//   2. `MarkdownPreviewConfiguration.getForResource` -> ./config getMarkdownItConfig()
+//   3. `vscode.env.uriScheme` + vscode: scheme normalization -> removed entirely
+//   4. `vscode.workspace.getWorkspaceFolder`     -> RenderContext.rootPath
+//   5. `MarkdownContributionProvider`            -> a plain array of markdown-it plugins
+//
+// Additions over the original:
+//   - collects a heading outline into the render env, for the table of contents
+//   - intercepts ```mermaid fences into placeholder divs the renderer hydrates
+
+import MarkdownItFactory, { type Options, type PluginSimple } from 'markdown-it';
+import type MarkdownIt from 'markdown-it';
+import type Token from 'markdown-it/lib/token.mjs';
+import hljs from './highlight';
+import { githubSlugifier, type ISlugifier, type SlugBuilder } from './slugify';
+import { extendMarkdownIt as extendMarkdownItWithFrontMatter } from './frontMatter';
+import { getMarkdownItConfig, type MarkdownItConfig } from './config';
+import { asLocalResourceUri, escapeAttribute, isAbsolutePath } from './util';
+import { dirname, resolvePath } from './paths';
+
+/**
+ * Adds begin line index to the output via the 'data-line' data attribute.
+ */
+const pluginSourceMap: PluginSimple = (md): void => {
+	// Set the attribute on every possible token.
+	md.core.ruler.push('source_map_data_attribute', (state): void => {
+		for (const token of state.tokens) {
+			if (token.map && token.type !== 'inline') {
+				token.attrSet('data-line', String(token.map[0]));
+				token.attrJoin('class', 'code-line');
+				token.attrJoin('dir', 'auto');
+			}
+		}
+	});
+
+	// The 'html_block' renderer doesn't respect `attrs`. We need to insert a marker.
+	const originalHtmlBlockRenderer = md.renderer.rules['html_block'];
+	if (originalHtmlBlockRenderer) {
+		md.renderer.rules['html_block'] = (tokens, idx, options, env, self) => (
+			`<div ${self.renderAttrs(tokens[idx])} ></div>\n` +
+			originalHtmlBlockRenderer(tokens, idx, options, env, self)
+		);
+	}
+};
+
+export interface HeadingInfo {
+	readonly level: number;
+	readonly text: string;
+	readonly slug: string;
+	readonly line: number;
+}
+
+export interface RenderOutput {
+	readonly html: string;
+	readonly containingImages: Set<string>;
+	readonly headings: readonly HeadingInfo[];
+}
+
+/** Where the document lives, so relative links and images can be resolved. */
+export interface RenderContext {
+	/** Absolute path of the markdown file, or undefined for untitled content. */
+	readonly documentPath?: string;
+	/** Absolute path of the opened folder, used to resolve `/absolute` links. */
+	readonly rootPath?: string;
+}
+
+interface RenderEnv extends RenderContext {
+	readonly containingImages: Set<string>;
+	readonly headings: HeadingInfo[];
+	readonly slugifier: SlugBuilder;
+}
+
+export class MarkdownItEngine {
+
+	#md?: MarkdownIt;
+
+	public readonly slugifier: ISlugifier = githubSlugifier;
+
+	readonly #plugins: readonly PluginSimple[];
+
+	public constructor(plugins: readonly PluginSimple[] = []) {
+		this.#plugins = plugins;
+	}
+
+	#getEngine(config: MarkdownItConfig): MarkdownIt {
+		if (!this.#md) {
+			let md: MarkdownIt = MarkdownItFactory(getMarkdownOptions(() => md));
+			md.linkify.set({ fuzzyLink: false });
+
+			for (const plugin of this.#plugins) {
+				try {
+					md = plugin(md) ?? md;
+				} catch (e) {
+					console.error('Could not load markdown-it plugin', e);
+				}
+			}
+
+			md = extendMarkdownItWithFrontMatter(md);
+
+			this.#addImageRenderer(md);
+			this.#addFencedRenderer(md);
+			this.#addMermaidRenderer(md);
+			this.#addLinkValidator(md);
+			this.#addNamedHeaders(md);
+			this.#addLinkRenderer(md);
+			md.use(pluginSourceMap);
+			this.#md = md;
+		}
+
+		const md = this.#md;
+		md.set(config);
+		return md;
+	}
+
+	/** Force the markdown-it instance to be rebuilt (e.g. after toggling math). */
+	public reloadPlugins(): void {
+		this.#md = undefined;
+	}
+
+	public render(text: string, context: RenderContext = {}): RenderOutput {
+		const config = getMarkdownItConfig();
+		const engine = this.#getEngine(config);
+
+		const env: RenderEnv = {
+			containingImages: new Set<string>(),
+			headings: [],
+			slugifier: this.slugifier.createBuilder(),
+			documentPath: context.documentPath,
+			rootPath: context.rootPath,
+		};
+
+		const tokens = engine.parse(text, env);
+		const html = engine.renderer.render(tokens, { ...engine.options, ...config }, env);
+
+		return {
+			html,
+			containingImages: env.containingImages,
+			headings: env.headings,
+		};
+	}
+
+	public tokenize(text: string): Token[] {
+		const engine = this.#getEngine(getMarkdownItConfig());
+		return engine.parse(text, {
+			containingImages: new Set<string>(),
+			headings: [],
+			slugifier: this.slugifier.createBuilder(),
+		} satisfies RenderEnv);
+	}
+
+	#addImageRenderer(md: MarkdownIt): void {
+		const original = md.renderer.rules.image;
+		md.renderer.rules.image = (tokens: Token[], idx: number, options, env: RenderEnv, self) => {
+			const token = tokens[idx];
+			const src = token.attrGet('src');
+			if (src) {
+				env.containingImages?.add(src);
+
+				if (!token.attrGet('data-src')) {
+					token.attrSet('src', this.#toResourceUri(src, env));
+					token.attrSet('data-src', src);
+				}
+			}
+
+			if (original) {
+				return original(tokens, idx, options, env, self);
+			} else {
+				return self.renderToken(tokens, idx, options);
+			}
+		};
+	}
+
+	#addFencedRenderer(md: MarkdownIt): void {
+		const original = md.renderer.rules['fenced'];
+		md.renderer.rules['fenced'] = (tokens: Token[], idx: number, options, env, self) => {
+			const token = tokens[idx];
+			if (token.map?.length) {
+				token.attrJoin('class', 'hljs');
+			}
+
+			if (original) {
+				return original(tokens, idx, options, env, self);
+			} else {
+				return self.renderToken(tokens, idx, options);
+			}
+		};
+	}
+
+	/**
+	 * Emits a placeholder for ```mermaid blocks. Mermaid itself renders in the
+	 * renderer process after the HTML is in the DOM, since it needs layout.
+	 */
+	#addMermaidRenderer(md: MarkdownIt): void {
+		const original = md.renderer.rules.fence;
+		md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+			const token = tokens[idx];
+			const lang = token.info.trim().split(/\s+/)[0].toLowerCase();
+			if (lang === 'mermaid') {
+				const line = token.map ? token.map[0] : 0;
+				return `<div class="mermaid-block code-line" data-line="${line}" data-mermaid-src="${escapeAttribute(token.content)}"><pre class="mermaid-fallback">${md.utils.escapeHtml(token.content)}</pre></div>\n`;
+			}
+			return original
+				? original(tokens, idx, options, env, self)
+				: self.renderToken(tokens, idx, options);
+		};
+	}
+
+	#addLinkValidator(md: MarkdownIt): void {
+		const validateLink = md.validateLink;
+		md.validateLink = (link: string) => {
+			return validateLink(link)
+				|| /^data:image\/.*?;/.test(link)
+				|| link.startsWith('mdr://');
+		};
+	}
+
+	#addNamedHeaders(md: MarkdownIt): void {
+		const original = md.renderer.rules.heading_open;
+		md.renderer.rules.heading_open = (tokens: Token[], idx: number, options, env: unknown, self) => {
+			const title = this.#tokenToPlainText(tokens[idx + 1]);
+			const renderEnv = env as RenderEnv;
+			const slug = renderEnv.slugifier ? renderEnv.slugifier.add(title) : this.slugifier.fromHeading(title);
+			tokens[idx].attrSet('id', slug.value);
+
+			renderEnv.headings?.push({
+				level: Number(tokens[idx].tag.slice(1)) || 1,
+				text: title,
+				slug: slug.value,
+				line: tokens[idx].map ? tokens[idx].map![0] : 0,
+			});
+
+			if (original) {
+				return original(tokens, idx, options, env, self);
+			} else {
+				return self.renderToken(tokens, idx, options);
+			}
+		};
+	}
+
+	#tokenToPlainText(token: Token): string {
+		if (token.children) {
+			return token.children.map(x => this.#tokenToPlainText(x)).join('');
+		}
+
+		switch (token.type) {
+			case 'text':
+			case 'emoji':
+			case 'code_inline':
+				return token.content;
+			default:
+				return '';
+		}
+	}
+
+	#addLinkRenderer(md: MarkdownIt): void {
+		const original = md.renderer.rules.link_open;
+
+		md.renderer.rules.link_open = (tokens: Token[], idx: number, options, env: RenderEnv, self) => {
+			const token = tokens[idx];
+			const href = token.attrGet('href');
+			// A string, including empty string, may be `href`.
+			if (typeof href === 'string') {
+				token.attrSet('data-href', href);
+				// Resolve relative markdown links to absolute paths so the renderer can
+				// navigate to them without having to know the current document's folder.
+				if (href && !/^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith('#')) {
+					const resolved = this.#resolveLocalPath(href.split('#')[0], env);
+					if (resolved) {
+						token.attrSet('data-resolved-path', resolved);
+					}
+				}
+			}
+			if (original) {
+				return original(tokens, idx, options, env, self);
+			} else {
+				return self.renderToken(tokens, idx, options);
+			}
+		};
+	}
+
+	/**
+	 * Replaces the original `#toResourceUri`, which produced webview URIs.
+	 * Here local references become `mdr://` URLs served by the host.
+	 */
+	#toResourceUri(href: string, env: RenderEnv): string {
+		try {
+			if (href.startsWith('data:') || href.startsWith('mdr:')) {
+				return href;
+			}
+
+			// Support file:// links
+			if (/^file:/i.test(href)) {
+				const p = decodeURIComponent(new URL(href).pathname);
+				return asLocalResourceUri(/^\/[a-z]:/i.test(p) ? p.slice(1) : p);
+			}
+
+			// If the original link doesn't look like a url with a scheme, assume it must
+			// be a link to a file next to the document (or under the opened folder).
+			if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
+				const resolved = this.#resolveLocalPath(href, env);
+				return resolved ? asLocalResourceUri(resolved) : href;
+			}
+
+			return href;
+		} catch {
+			return href;
+		}
+	}
+
+	/** Resolve a document-relative or root-absolute reference to an absolute fs path. */
+	#resolveLocalPath(href: string, env: RenderEnv): string | undefined {
+		if (!href) {
+			return undefined;
+		}
+
+		const bare = href.split(/[?#]/)[0];
+		if (!bare) {
+			return undefined;
+		}
+
+		if (isAbsolutePath(bare)) {
+			// Root-absolute paths resolve against the opened folder, matching how VS Code
+			// resolves them against the workspace root.
+			if (bare.startsWith('/') && env.rootPath) {
+				return resolvePath(env.rootPath, bare.replace(/^\/+/, ''));
+			}
+			return bare;
+		}
+
+		if (env.documentPath) {
+			return resolvePath(dirname(env.documentPath), bare);
+		}
+		if (env.rootPath) {
+			return resolvePath(env.rootPath, bare);
+		}
+		return undefined;
+	}
+}
+
+function getMarkdownOptions(md: () => MarkdownIt): Options {
+	// `highlight` is called by markdown-it's own fence renderer.
+	return {
+		html: true,
+		highlight: (str: string, lang?: string) => {
+			lang = normalizeHighlightLang(lang);
+			if (lang && hljs.getLanguage(lang)) {
+				try {
+					return hljs.highlight(str, {
+						language: lang,
+						ignoreIllegals: true,
+					}).value;
+				}
+				catch {
+					// Unsupported/illegal language — fall through to the escaped body below.
+				}
+			}
+			return md().utils.escapeHtml(str);
+		}
+	};
+}
+
+function normalizeHighlightLang(lang: string | undefined) {
+	switch (lang?.toLowerCase()) {
+		case 'shell':
+			return 'sh';
+
+		case 'py3':
+			return 'python';
+
+		case 'tsx':
+		case 'typescriptreact':
+			// Workaround for highlight not supporting tsx: https://github.com/isagalaev/highlight.js/issues/1155
+			return 'jsx';
+
+		case 'json5':
+		case 'jsonc':
+			return 'json';
+
+		case 'c#':
+		case 'csharp':
+			return 'cs';
+
+		default:
+			return lang;
+	}
+}

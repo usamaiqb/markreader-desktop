@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+	<!-- White rounded tile, like the placeholder icon -->
+	<rect width="512" height="512" rx="96" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="6" />
+
+	<!-- M + arrow glyphs, copied from mark-reader (Android) ic_launcher_foreground.xml,
+	     scaled from the 108x108 viewport and centered on the 512 canvas. -->
+	<g transform="translate(-149 -149) scale(7.5)">
+		<path fill="#3A3A3C" d="M29,68V40h8l8,18l8,-18h8v28h-6V50l-10,18l-10,-18v18z" />
+		<path fill="#007AFF" d="M67,40h8v14h4l-8,14l-8,-14h4z" />
+	</g>
+</svg>

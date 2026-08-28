@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Copyright (c) 2026 DigiGate -->
+<!--
+	The HTML shell. This replaces MdDocumentRenderer.renderDocument() from
+	vscode/extensions/markdown-language-features/src/preview/documentRenderer.ts — most of
+	that method was webview CSP nonces and asWebviewUri() rewriting, neither of which
+	applies here. The `.markdown-body` wrapper is kept, since markdown.css targets it.
+-->
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy"
+		content="default-src 'none'; img-src 'self' mdr: http://mdr.localhost data: https:; media-src 'self' mdr: http://mdr.localhost data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' mdr: http://mdr.localhost data:; connect-src 'self' mdr: http://mdr.localhost ipc: http://ipc.localhost;">
+	<title>MarkReader</title>
+
+	<!-- Order matters: markdown.css and highlight.css come from VS Code unmodified,
+	     theme.css supplies the --vscode-* variables they expect, app.css adds the chrome. -->
+	<link rel="stylesheet" href="css/markdown.css">
+	<link rel="stylesheet" href="css/highlight.css">
+	<link rel="stylesheet" href="css/katex.css">
+	<link rel="stylesheet" href="css/theme.css">
+	<link rel="stylesheet" href="css/app.css">
+</head>
+
+<body class="vscode-dark wordWrap no-document">
+
+	<div id="toolbar">
+		<button class="mr-button" id="btn-open-file" title="Open File (Ctrl+O)">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<path d="M2 3.5h4l1.2 1.5H14v7.5H2z" />
+			</svg>
+			Open
+		</button>
+		<button class="mr-button" id="btn-open-folder" title="Open Folder (Ctrl+Shift+O)">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<path d="M1.5 4h4l1 1.5h8V13h-13z" />
+				<path d="M1.5 4V13" />
+			</svg>
+			Folder
+		</button>
+
+		<span class="mr-spacer"></span>
+
+		<button class="mr-button" id="btn-toggle-sidebar" title="Toggle Sidebar (Ctrl+B)" aria-pressed="false">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<rect x="1.5" y="2.5" width="13" height="11" rx="1" />
+				<path d="M6 2.5v11" />
+			</svg>
+		</button>
+		<button class="mr-button" id="btn-toggle-outline" title="Toggle Outline (Ctrl+Shift+B)" aria-pressed="false">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<path d="M3 4h10M5 8h8M7 12h6" />
+			</svg>
+		</button>
+
+		<span id="doc-title">No document</span>
+
+		<button class="mr-button" id="btn-find" title="Find in Document (Ctrl+F)">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<circle cx="7" cy="7" r="4.25" />
+				<path d="M10.2 10.2 14 14" />
+			</svg>
+		</button>
+		<button class="mr-button" id="btn-theme" title="Toggle Light/Dark (Ctrl+K)">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<path d="M13 9.6A5.6 5.6 0 0 1 6.4 3a5.6 5.6 0 1 0 6.6 6.6z" />
+			</svg>
+		</button>
+	</div>
+
+	<div id="sidebar">
+		<div class="pane-header">Files</div>
+		<input id="file-filter" type="search" placeholder="Filter files…" autocomplete="off" spellcheck="false">
+		<div class="pane-body" id="file-list">
+			<div class="pane-empty">No folder open. Use <strong>Folder</strong> to pick one.</div>
+		</div>
+	</div>
+
+	<div id="outline">
+		<div class="pane-header">Outline</div>
+		<div class="pane-body" id="toc-list">
+			<div class="pane-empty">No headings.</div>
+		</div>
+	</div>
+
+	<div id="find-bar">
+		<input id="find-input" type="text" placeholder="Find" autocomplete="off" spellcheck="false">
+		<span id="find-count">0 / 0</span>
+		<button class="mr-button" id="find-prev" title="Previous Match (Shift+Enter)">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<path d="M4 10l4-4 4 4" />
+			</svg>
+		</button>
+		<button class="mr-button" id="find-next" title="Next Match (Enter)">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<path d="M4 6l4 4 4-4" />
+			</svg>
+		</button>
+		<button class="mr-button" id="find-close" title="Close (Escape)">
+			<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true">
+				<path d="M4 4l8 8M12 4l-8 8" />
+			</svg>
+		</button>
+	</div>
+
+	<div id="empty-state">
+		<svg width="46" height="46" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"
+			aria-hidden="true">
+			<path d="M3.5 1.5h6L12.5 4.5v10h-9z" />
+			<path d="M9.5 1.5v3h3M5.5 7.5h5M5.5 10h5M5.5 12h3" />
+		</svg>
+		<div class="empty-title">No document open</div>
+		<div>Drop a Markdown file here, or press <kbd>Ctrl</kbd>+<kbd>O</kbd></div>
+		<div class="empty-actions">
+			<button class="mr-button" id="empty-open-file">Open File…</button>
+			<button class="mr-button" id="empty-open-folder">Open Folder…</button>
+		</div>
+	</div>
+
+	<div id="content">
+		<div class="markdown-body" dir="auto" id="markdown-body"></div>
+	</div>
+
+	<!-- ESM, so the mermaid chunk can be dynamically imported only when a document needs it. -->
+	<script type="module" src="renderer.js"></script>
+</body>
+
+</html>
