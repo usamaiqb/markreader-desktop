@@ -1,0 +1,35 @@
+# Enforce consistent line endings — LF in the working tree, on every platform.
+#
+# The Git for Windows installer sets core.autocrlf=true in the system config, so without
+# this file a Windows clone gets CRLF working files. That would break byte-comparison of
+# the vendored VS Code files against upstream, which ships LF:
+#
+#   src/renderer/css/markdown.css
+#   src/renderer/css/highlight.css
+#   src/renderer/slugify.ts
+#
+# Those three are kept verbatim so they can be re-diffed against the vscode repo — see
+# licenses/NOTICE.md. Local deviations belong in a separate overrides file.
+* text=auto eol=lf
+
+# Source — LF
+*.ts text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.rs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.svg text eol=lf
+
+# Config, lockfiles and docs — LF
+*.json text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+
+# Binary — no conversion, no text diffing
+*.png binary
+*.ico binary
+*.icns binary
