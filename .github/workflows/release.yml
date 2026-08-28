@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write   # required to create the GitHub Release
+
+jobs:
+  check-version:
+    name: Version files in sync
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Tag matches package.json
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "❌ Tag '${GITHUB_REF_NAME}' does not match package.json version '$PKG'"
+            exit 1
+          fi
+          echo "✅ Tag matches package.json: $TAG"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Check version consistency
+        run: npm run check:version
+
+      - name: Working tree clean
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "❌ Working tree has uncommitted changes:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "✅ Working tree clean"
+
+  build:
+    name: Build ${{ matrix.artifact }}
+    needs: check-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bundles: nsis
+            artifact: windows
+          - os: ubuntu-24.04
+            bundles: deb,appimage
+            artifact: linux
+          - os: macos-latest
+            bundles: dmg
+            artifact: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl wget file \
+            libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            xvfb
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      # Guard: the exact tagged commit is re-tested before we ship. Lint/typecheck
+      # are static and already covered on the PR, so only the dynamic suite runs.
+      - name: Smoke test
+        if: runner.os != 'Linux'
+        run: npm test
+
+      - name: Smoke test (headless)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm test
+
+      - name: Bundle installers
+        run: npx tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: markreader-${{ matrix.artifact }}
+          path: |
+            src-tauri/target/release/markreader
+            src-tauri/target/release/markreader.exe
+            src-tauri/target/release/bundle/**
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      # fetch-depth: 0 so auto-generated release notes can find the previous tag
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4 # v4.0.0
+        with:
+          path: dist
+          merge-multiple: true
+
+      # Auto-generated notes: categorized PR list (per .github/release.yml) +
+      # "New Contributors" + compare link. CHANGELOG.md is kept in-repo for
+      # convention; the Release page is the auto-generated view.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: dist/**
