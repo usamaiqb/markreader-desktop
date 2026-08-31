@@ -192,52 +192,26 @@ th {
 /* ------------------------------------------------------------------ front matter */
 
 /*
- * These were appended to the end of `markdown.css`, which is supposed to be a verbatim copy of
- * VS Code's — `table.frontmatter` is emitted by our own `frontMatter.ts` and has no upstream
- * counterpart, so they belong here. `text-align` and the list indent are logical now;
- * everything else is as it was.
+ * VS Code's own front-matter rules live in `markdown.css` and stay there, untouched. These
+ * three override its physical properties with logical ones, so a front-matter table in an RTL
+ * document aligns and indents from the right — see `samples/rtl.md`.
+ *
+ * Overrides, not a copy. An earlier attempt moved the whole upstream block here and edited it,
+ * which left `markdown.css` 44 lines short of upstream and defeated the byte-identity the file
+ * exists for. `document-overrides.css` loads after `markdown.css`, so equal-specificity rules
+ * here win without `!important`.
  */
-table.frontmatter {
-	margin-bottom: 16px;
-	border-collapse: collapse;
-}
-
 table.frontmatter th,
 table.frontmatter td {
-	padding: 6px 13px;
-	border: 1px solid var(--vscode-widget-border, rgba(127, 127, 127, 0.35));
 	text-align: start;
-	vertical-align: top;
-}
-
-table.frontmatter th {
-	font-weight: 600;
-	white-space: nowrap;
 }
 
 table.frontmatter td > ul {
-	margin: 0;
 	padding-left: 0;
 	padding-inline-start: 1.2em;
 }
 
-pre.frontmatter {
-	margin-bottom: 16px;
-}
-
 .frontmatter-error {
-	margin-bottom: 16px;
-	padding: 8px 13px;
 	border-left: 0;
 	border-inline-start: 4px solid var(--vscode-editorError-foreground, #f48771);
-	background: var(--vscode-inputValidation-errorBackground, rgba(244, 135, 113, 0.1));
-	color: var(--vscode-editorError-foreground, #f48771);
-}
-
-.frontmatter-error pre {
-	margin: 6px 0 0;
-	white-space: pre-wrap;
-	color: inherit;
-	background: transparent;
-	padding: 0;
 }

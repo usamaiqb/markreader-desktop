@@ -179,7 +179,7 @@
 			th.textAlign === 'start', th.textAlign);
 		check('mermaid styling survived the move out of app.css',
 			diagram.overflowX === 'auto', diagram.overflowX);
-		check('front matter styling survived the move out of markdown.css',
+		check('front matter rules from markdown.css are in effect',
 			getComputedStyle(document.querySelector('#markdown-body table.frontmatter'))
 				.borderCollapse === 'collapse');
 		check('no dir attribute on table internals', taggedInternals === 0, `${taggedInternals} tagged`);

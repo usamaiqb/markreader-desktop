@@ -30,12 +30,19 @@ The MIT license text is reproduced in `licenses/vscode.txt`, which is where the 
 upstream's own header untouched, including its `License.txt` reference, so they stay
 byte-comparable against the vscode repo.
 
-Verbatim means verbatim, and it had stopped being true: `markdown.css` carried 44 lines of
-MarkReader's own front-matter rules, appended below the upstream content. They moved to
-`src/renderer/css/document-overrides.css`, which is where every local deviation belongs.
-`test/unit/vendored-files.test.ts` now pins all three files by hash, so the next such edit
-fails a test rather than going unnoticed — though a hash only proves *unchanged since*, not
-*matches upstream*. The diff against the vscode repo is still a manual step, and still owed.
+Verbatim means verbatim, and it briefly stopped being true — in the opposite direction to the
+one first suspected. 44 lines of front-matter rules were moved out of `markdown.css` as though
+they were MarkReader's own additions. **They are upstream's**: VS Code ships a `yamlPreamble`
+extension, and its stylesheet carries the rules for it. The move left the file 44 lines short
+of the copy it exists to be. They are restored, and the three properties that genuinely deviate
+— `text-align`, the list indent and the error border, made logical so RTL front matter lays out
+correctly — are overrides in `src/renderer/css/document-overrides.css`, which is where every
+local deviation belongs.
+
+`test/unit/vendored-files.test.ts` pins all three files by hash, so the next such edit fails a
+test rather than going unnoticed — though a hash only proves *unchanged since*, not *matches
+upstream*. That diff has now been run against `microsoft/vscode` `main`: `markdown.css` and
+`highlight.css` match it exactly, apart from the single marker comment line each carries.
 
 ## Bundled dependencies
 

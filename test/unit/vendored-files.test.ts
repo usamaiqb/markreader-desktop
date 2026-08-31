@@ -18,11 +18,16 @@
  *  It cannot prove the copy matches upstream — that needs the vscode repo, and is the manual
  *  step the NOTICE describes. Byte-identity is what makes that manual diff a one-liner.
  *
- *  That distinction is not academic. When this check was first written, `markdown.css` carried
- *  44 lines of MarkReader's own front-matter rules, appended below the upstream content and
- *  described by every surrounding comment as verbatim. They were moved to
- *  `document-overrides.css` and the hash taken after. **A real upstream diff is still owed** —
- *  the copy-button block around line 438 is the remaining suspect.
+ *  That distinction is not academic, and it has already caught something. These hashes were
+ *  once taken over a `markdown.css` that had had 44 lines of front-matter rules moved out of
+ *  it, on the belief they were MarkReader's own. **They are upstream's** — VS Code ships a
+ *  `yamlPreamble` extension — so the move left this file 44 lines short of the copy it exists
+ *  to be, and the hash would have pinned that divergence indefinitely. The block is restored,
+ *  and the three properties that genuinely deviate are logical-property overrides in
+ *  `document-overrides.css`.
+ *
+ *  The upstream diff has since been run against `microsoft/vscode` `main`: both stylesheets
+ *  match it exactly, apart from the single `Ported verbatim from …` marker line each carries.
  *
  *  Raw bytes are hashed rather than normalized text, which `.gitattributes` makes safe: it
  *  pins `eol=lf` for exactly these files, since a Windows clone would otherwise get CRLF and
@@ -49,8 +54,8 @@ const VENDORED: readonly VendoredFile[] = [
 	{
 		path: 'src/renderer/css/markdown.css',
 		origin: 'extensions/markdown-language-features/media/markdown.css',
-		bytes: 10687,
-		sha256: '57e78f6e97dbc78baff8421e8fdd845f902e6d74ccd1fe27f783c6ad7e39945f',
+		bytes: 11551,
+		sha256: '9c7fc4016a05a953820e7dd83506cecc31c610a19d137142f21b10bed7c0ff2a',
 	},
 	{
 		path: 'src/renderer/css/highlight.css',
