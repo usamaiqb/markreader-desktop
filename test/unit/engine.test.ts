@@ -8,8 +8,9 @@
  *  is asserted against the real plugin set: task lists, math, front matter.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { MarkdownItEngine } from '../../src/renderer/engine';
+import { ensureHighlighter, ensureMath } from '../../src/renderer/lazy';
 import { getPlugins } from '../../src/renderer/plugins';
 import { setConfig } from '../../src/renderer/config';
 
@@ -17,6 +18,10 @@ function render(text: string, context?: Parameters<MarkdownItEngine['render']>[1
 	const engine = new MarkdownItEngine(getPlugins());
 	return engine.render(text, context);
 }
+
+// KaTeX and highlight.js load on demand; the app does it from `prepareForDocument` before it
+// paints. These tests assert the fully loaded output, so they load both up front.
+beforeAll(() => Promise.all([ensureHighlighter(), ensureMath()]));
 
 describe('MarkdownItEngine', () => {
 	it('renders headings and collects the outline', () => {
@@ -49,8 +54,42 @@ describe('MarkdownItEngine', () => {
 	it('emits a mermaid placeholder instead of the raw diagram', () => {
 		const { html } = render('```mermaid\ngraph TD;\nA-->B;\n```');
 		expect(html).toContain('mermaid-block');
-		expect(html).toContain('data-mermaid-src');
 		expect(html).not.toContain('<svg');
+	});
+
+	it('renders math once KaTeX is loaded', () => {
+		// The plugin set is built from `getPlugins()`, which leaves math out until the module
+		// has loaded — so this also pins that `beforeAll` above actually loaded it. The
+		// CommonJS interop that breaks only in the bundled build is the smoke suite's job.
+		const { html } = render('$x^2$ and $$y^2$$');
+		expect(html).toContain('katex');
+		expect(html).not.toContain('$x^2$');
+	});
+
+	it('puts dir="auto" on a table but not on its rows or cells', () => {
+		// `dir="auto"` skips descendants that carry their own `dir`, so a table whose rows and
+		// cells all had one had nothing left to read and fell back to ltr — laying an RTL
+		// table's columns out backwards.
+		const { html } = render('| a | b |\n| --- | --- |\n| 1 | 2 |');
+		expect(html).toMatch(/<table[^>]*dir="auto"/);
+		expect(html).not.toMatch(/<thead[^>]*dir=/);
+		expect(html).not.toMatch(/<tbody[^>]*dir=/);
+		expect(html).not.toMatch(/<tr[^>]*dir=/);
+		expect(html).not.toMatch(/<t[hd][^>]*dir=/);
+	});
+
+	it('still marks table internals with source-map lines', () => {
+		// Only `dir` is withheld from them; `data-line` and `code-line` are unaffected.
+		const { html } = render('| a |\n| --- |\n| 1 |');
+		expect(html).toMatch(/<tr[^>]*data-line=/);
+	});
+
+	it('carries the diagram source in the fallback element, not an attribute', () => {
+		// An attribute would not survive the sanitizer: DOMPurify drops any value containing
+		// `-->`, which is every flowchart arrow. See `#addMermaidRenderer`.
+		const { html } = render('```mermaid\ngraph TD;\nA-->B;\n```');
+		expect(html).toContain('<pre class="mermaid-fallback">graph TD;\nA--&gt;B;');
+		expect(html).not.toContain('data-mermaid-src');
 	});
 
 	it('renders task list markers as checkboxes', () => {

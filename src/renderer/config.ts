@@ -83,6 +83,23 @@ export function getMarkdownItConfig(): MarkdownItConfig {
 	return { breaks, linkify, typographer };
 }
 
+// -------------------------------------------------------------------- host defaults
+
+/**
+ * Defaults supplied by the host, replacing the ones this module ships.
+ *
+ * `defaultConfig` above is a *desktop* default set — the font stack is Segoe-first, and 14px
+ * over 22px is a mouse-and-keyboard reading size. A phone wants neither. Rather than teach
+ * this module about platforms, the host says what it wants at start-up and these become the
+ * baseline that stored settings are then applied over.
+ *
+ * Call before `setConfig(parseConfig(...))`, or the user's stored settings are overwritten by
+ * the host's defaults instead of the other way round.
+ */
+export function setHostDefaults(defaults: Partial<MarkReaderConfig>): void {
+	current = { ...current, ...defaults };
+}
+
 // ------------------------------------------------------------------ stored settings
 
 function asBoolean(value: unknown): boolean | undefined {

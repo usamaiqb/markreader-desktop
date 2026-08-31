@@ -1,0 +1,21 @@
+{
+	// Emit config for the unbundled build (`npm run build:esm`). The base tsconfig is
+	// noEmit — it exists to typecheck. This one actually writes JS, one file in, one file out,
+	// so the shipped renderer stays near line-for-line with the source.
+	//
+	// `highlight.ts` is excluded on purpose: it is 56 imports of highlight.js internals, and
+	// the ESM entry points those ship (`highlight.js/es/*`) are shims that re-export the
+	// CommonJS ones, which a browser cannot load. `scripts/build-esm.mjs` prebuilds it into
+	// `vendor/highlight.js` instead.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": false,
+		"rootDir": "src/renderer",
+		"outDir": "out/renderer-esm",
+		"declaration": false,
+		"sourceMap": true,
+		"removeComments": false
+	},
+	"include": ["src/renderer/**/*.ts"],
+	"exclude": ["src/renderer/highlight.ts"]
+}

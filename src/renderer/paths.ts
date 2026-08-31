@@ -62,3 +62,12 @@ export function resolvePath(base: string, rel: string): string {
 export function isMarkdownPath(p: string): boolean {
 	return /\.(md|markdown|mdown|mkdn|mkd|mdwn|mdtxt|mdtext|workbook)$/i.test(p);
 }
+
+/**
+ * Whether two paths name the same document. Separator- and case-insensitive, because a host
+ * may hand back the same file with either separator, and Windows paths differ only in case.
+ */
+export function samePath(a: string, b: string): boolean {
+	const normalize = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+	return normalize(a) === normalize(b);
+}

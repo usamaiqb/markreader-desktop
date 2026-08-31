@@ -34,9 +34,38 @@ export function escapeHtml(value: string): string {
  * The Rust protocol handler is handed the `mdr://` form on every platform; the origin the
  * page has to request is the only thing that differs.
  */
-const MDR_ORIGIN = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
-	? 'http://mdr.localhost'
-	: 'mdr://localhost';
+function detectResourceOrigin(): string {
+	if (typeof navigator === 'undefined') {
+		return 'mdr://localhost';
+	}
+	// Android serves the page itself through WebViewAssetLoader, so document resources are
+	// same-origin: no custom scheme to register, and `readFile` becomes an ordinary `fetch`.
+	if (navigator.userAgent.includes('Android')) {
+		return 'https://appassets.androidplatform.net';
+	}
+	// WebView2 supports no non-standard schemes; the runtime maps `mdr://` onto this.
+	if (navigator.userAgent.includes('Windows')) {
+		return 'http://mdr.localhost';
+	}
+	return 'mdr://localhost';
+}
+
+let resourceOrigin = detectResourceOrigin();
+
+/**
+ * Overrides the origin document resources are served from.
+ *
+ * The sniff above is a default, not a policy — a host knows its own origin and should say so
+ * rather than be guessed at. Whatever is set here has to be reachable under the page's CSP.
+ */
+export function setResourceOrigin(origin: string): void {
+	resourceOrigin = origin.replace(/\/+$/, '');
+}
+
+/** The origin document resources are currently rewritten to. */
+export function getResourceOrigin(): string {
+	return resourceOrigin;
+}
 
 export function asLocalResourceUri(absolutePath: string): string {
 	// Normalize Windows separators and ensure a leading slash so the URL parses.
@@ -44,12 +73,12 @@ export function asLocalResourceUri(absolutePath: string): string {
 	if (!p.startsWith('/')) {
 		p = '/' + p;
 	}
-	return MDR_ORIGIN + p.split('/').map(encodeURIComponent).join('/');
+	return resourceOrigin + p.split('/').map(encodeURIComponent).join('/');
 }
 
 /** Inverse of {@link asLocalResourceUri}. */
 export function localResourceUriToPath(url: string): string | undefined {
-	const prefix = MDR_ORIGIN + '/';
+	const prefix = resourceOrigin + '/';
 	if (!url.startsWith(prefix)) {
 		return undefined;
 	}

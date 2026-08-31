@@ -15,12 +15,16 @@
 		content="default-src 'none'; img-src 'self' mdr: http://mdr.localhost data: https:; media-src 'self' mdr: http://mdr.localhost data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' mdr: http://mdr.localhost data:; connect-src 'self' mdr: http://mdr.localhost ipc: http://ipc.localhost;">
 	<title>MarkReader</title>
 
-	<!-- Order matters: markdown.css and highlight.css come from VS Code unmodified,
-	     theme.css supplies the --vscode-* variables they expect, app.css adds the chrome. -->
+	<!-- Order matters: markdown.css and highlight.css come from VS Code unmodified, theme.css
+	     supplies the --vscode-* variables they expect, document-overrides.css carries every
+	     local deviation from those two plus the document's own rules, and app.css adds the
+	     chrome. Everything above app.css is what a document-only host loads. -->
+	<!-- css/katex.css is deliberately absent: it is 1.4MB of stylesheet and inlined fonts, and
+	     most documents have no math. `lazy.ts` injects it the first time one does. -->
 	<link rel="stylesheet" href="css/markdown.css">
 	<link rel="stylesheet" href="css/highlight.css">
-	<link rel="stylesheet" href="css/katex.css">
 	<link rel="stylesheet" href="css/theme.css">
+	<link rel="stylesheet" href="css/document-overrides.css">
 	<link rel="stylesheet" href="css/app.css">
 </head>
 

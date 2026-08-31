@@ -13,10 +13,7 @@
 //   - `vscode.l10n.t(...)` -> plain strings
 //   - dropped the `data-vscode-context` attribute (webview context menus only)
 
-import type MarkdownIt from 'markdown-it';
-import type { Options } from 'markdown-it';
-import type Token from 'markdown-it/lib/token.mjs';
-import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs';
+import type { MarkdownIt, MarkdownItOptions, StateBlock, Token } from 'markdown-it';
 import * as yaml from 'yaml';
 import { escapeHtml } from './util';
 import { getConfig, type FrontMatterRenderStyle } from './config';
@@ -26,6 +23,8 @@ const MARKER = '---';
 
 interface IFrontMatterMeta {
 	readonly content: string;
+	/** markdown-it 15 types `Token.meta` as an open record; this has to be assignable to one. */
+	[key: string]: unknown;
 }
 
 /**
@@ -94,7 +93,7 @@ const frontMatterRule = (state: StateBlock, startLine: number, endLine: number, 
 	return true;
 };
 
-function renderFrontMatter(tokens: Token[], idx: number, options: Options): string {
+function renderFrontMatter(tokens: Token[], idx: number, options: MarkdownItOptions): string {
 	const meta = tokens[idx].meta as IFrontMatterMeta | undefined;
 	if (!meta) {
 		return '';
@@ -113,7 +112,7 @@ function renderFrontMatter(tokens: Token[], idx: number, options: Options): stri
 	}
 }
 
-function renderAsCodeBlock(meta: IFrontMatterMeta, options: Options): string {
+function renderAsCodeBlock(meta: IFrontMatterMeta, options: MarkdownItOptions): string {
 	let highlighted: string | undefined;
 	if (typeof options.highlight === 'function') {
 		try {

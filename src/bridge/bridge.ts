@@ -12,22 +12,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import type { FolderPayload, MarkDocument, MarkReaderApi } from '../renderer/host';
 
-export interface MarkDocument {
-	readonly path: string;
-	readonly text: string;
-}
-
-export interface TreeEntry {
-	readonly path: string;
-	readonly relativePath: string;
-	readonly name: string;
-}
-
-export interface FolderPayload {
-	readonly root: string;
-	readonly entries: readonly TreeEntry[];
-}
+export type { FolderPayload, MarkDocument, MarkReaderApi };
 
 /**
  * `listen()` is asynchronous, but the renderer expects the synchronous
@@ -73,7 +60,19 @@ function takeInjectedSettings(): Record<string, unknown> | undefined {
 		: undefined;
 }
 
-const api = {
+/**
+ * Annotated with the shared contract rather than inferred from this object, so that dropping
+ * or renaming a member here is a compile error instead of a silently narrower `window
+ * .markreader` for the renderer to trip over.
+ */
+const api: MarkReaderApi = {
+	// Desktop can do all three; an Android host will declare none of them.
+	capabilities: {
+		revealInFolder: true,
+		windowBackground: true,
+		watchesFiles: true,
+	},
+
 	openFileDialog: (): Promise<void> => invoke('open_file_dialog'),
 	openFolderDialog: (): Promise<void> => invoke('open_folder_dialog'),
 	openPath: (filePath: string): Promise<void> => invoke('open_document', { path: filePath }),
@@ -99,8 +98,6 @@ const api = {
 	onFolderOpened: (h: (payload: FolderPayload) => void) => subscribe('folder:opened', h),
 	onCommand: (channel: string, h: (payload: unknown) => void) => subscribe(channel, h),
 };
-
-export type MarkReaderApi = typeof api;
 
 Object.defineProperty(window, 'markreader', { value: api, enumerable: true });
 

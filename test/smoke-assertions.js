@@ -163,6 +163,50 @@
 		check('scroll spy marks exactly one active outline entry', activeToc === 1, `got ${activeToc}`);
 
 		log('');
+		log('--- document overrides ---');
+		// Proves the override layer is wired: linked by the page, copied by the build, and
+		// winning over markdown.css. If document-overrides.css silently 404s the document still
+		// renders, and only these fail.
+		// Not the front matter table — that one is built by frontMatter.ts with its own rules,
+		// and it is the first table in the document.
+		const th = getComputedStyle(
+			document.querySelector('#markdown-body table:not(.frontmatter) th'));
+		const diagram = getComputedStyle(document.querySelector('#markdown-body .mermaid-block'));
+		const taggedInternals =
+			document.querySelectorAll('#markdown-body :is(thead,tbody,tr,th,td)[dir]').length;
+
+		check('table headers align to the writing direction, not left',
+			th.textAlign === 'start', th.textAlign);
+		check('mermaid styling survived the move out of app.css',
+			diagram.overflowX === 'auto', diagram.overflowX);
+		check('front matter styling survived the move out of markdown.css',
+			getComputedStyle(document.querySelector('#markdown-body table.frontmatter'))
+				.borderCollapse === 'collapse');
+		check('no dir attribute on table internals', taggedInternals === 0, `${taggedInternals} tagged`);
+		check('the table itself still carries dir="auto"',
+			document.querySelector('#markdown-body table:not(.frontmatter)')
+				?.getAttribute('dir') === 'auto');
+
+		// The blockquote fix only shows up in an RTL context — in LTR the logical and physical
+		// edges are the same one, so an LTR document cannot tell the two apart. Probe with a
+		// throwaway element rather than asserting a width, which Chromium snaps to device
+		// pixels (5px reads back as 4.667px at 1.5x).
+		const probe = document.createElement('blockquote');
+		probe.setAttribute('dir', 'rtl');
+		document.getElementById('markdown-body').appendChild(probe);
+		const rtl = getComputedStyle(probe);
+		const rtlBar = {
+			right: parseFloat(rtl.borderRightWidth),
+			left: parseFloat(rtl.borderLeftWidth),
+			padStart: parseFloat(rtl.paddingRight),
+		};
+		probe.remove();
+		check('an RTL blockquote puts its bar on the right edge',
+			rtlBar.right > 4 && rtlBar.left === 0, JSON.stringify(rtlBar));
+		check('an RTL blockquote pads the side its bar is on',
+			rtlBar.padStart === 10, JSON.stringify(rtlBar));
+
+		log('');
 		log('--- find bar ---');
 		document.getElementById('btn-find').click();
 		const findInput = document.getElementById('find-input');

@@ -19,15 +19,32 @@
 //   - collects a heading outline into the render env, for the table of contents
 //   - intercepts ```mermaid fences into placeholder divs the renderer hydrates
 
-import MarkdownItFactory, { type Options, type PluginSimple } from 'markdown-it';
-import type MarkdownIt from 'markdown-it';
-import type Token from 'markdown-it/lib/token.mjs';
-import hljs from './highlight';
+import MarkdownItFactory, { type Env, type MarkdownIt, type MarkdownItOptions, type Token } from 'markdown-it';
+import type { PluginSimple } from './plugins';
+import { getHighlighter } from './lazy';
 import { githubSlugifier, type ISlugifier, type SlugBuilder } from './slugify';
 import { extendMarkdownIt as extendMarkdownItWithFrontMatter } from './frontMatter';
 import { getMarkdownItConfig, type MarkdownItConfig } from './config';
-import { asLocalResourceUri, escapeAttribute, isAbsolutePath } from './util';
+import { asLocalResourceUri, isAbsolutePath } from './util';
 import { dirname, resolvePath } from './paths';
+
+/**
+ * A table's own elements must not carry `dir="auto"`.
+ *
+ * `dir="auto"` resolves from an element's *own* text and ignores any descendant that carries a
+ * `dir` of its own. Set it on the table and on its rows and cells, and the table has nothing
+ * left to sniff — so an RTL table fell back to `ltr` and laid its columns out backwards. The
+ * `<table>` keeps the attribute; everything inside it loses it, and the table then reads the
+ * direction out of its cells.
+ */
+const TABLE_INTERNAL_TOKENS = new Set([
+	'thead_open',
+	'tbody_open',
+	'tfoot_open',
+	'tr_open',
+	'th_open',
+	'td_open',
+]);
 
 /**
  * Adds begin line index to the output via the 'data-line' data attribute.
@@ -39,7 +56,9 @@ const pluginSourceMap: PluginSimple = (md): void => {
 			if (token.map && token.type !== 'inline') {
 				token.attrSet('data-line', String(token.map[0]));
 				token.attrJoin('class', 'code-line');
-				token.attrJoin('dir', 'auto');
+				if (!TABLE_INTERNAL_TOKENS.has(token.type)) {
+					token.attrJoin('dir', 'auto');
+				}
 			}
 		}
 	});
@@ -75,10 +94,16 @@ export interface RenderContext {
 	readonly rootPath?: string;
 }
 
-interface RenderEnv extends RenderContext {
+/** Extends markdown-it's own `Env`, which is the open bag of state it threads through a render. */
+interface RenderEnv extends RenderContext, Env {
 	readonly containingImages: Set<string>;
 	readonly headings: HeadingInfo[];
 	readonly slugifier: SlugBuilder;
+}
+
+/** The `env` a renderer rule is handed: markdown-it makes no promise that it was supplied. */
+function renderEnvOf(env: unknown): RenderEnv | undefined {
+	return env as RenderEnv | undefined;
 }
 
 export class MarkdownItEngine {
@@ -161,15 +186,18 @@ export class MarkdownItEngine {
 
 	#addImageRenderer(md: MarkdownIt): void {
 		const original = md.renderer.rules.image;
-		md.renderer.rules.image = (tokens: Token[], idx: number, options, env: RenderEnv, self) => {
+		md.renderer.rules.image = (tokens: Token[], idx: number, options, env, self) => {
 			const token = tokens[idx];
+			const renderEnv = renderEnvOf(env);
+			// markdown-it 15 widened `attrGet` to `string | number | null`.
 			const src = token.attrGet('src');
 			if (src) {
-				env.containingImages?.add(src);
+				const value = String(src);
+				renderEnv?.containingImages?.add(value);
 
 				if (!token.attrGet('data-src')) {
-					token.attrSet('src', this.#toResourceUri(src, env));
-					token.attrSet('data-src', src);
+					token.attrSet('src', this.#toResourceUri(value, renderEnv));
+					token.attrSet('data-src', value);
 				}
 			}
 
@@ -200,6 +228,12 @@ export class MarkdownItEngine {
 	/**
 	 * Emits a placeholder for ```mermaid blocks. Mermaid itself renders in the
 	 * renderer process after the HTML is in the DOM, since it needs layout.
+	 *
+	 * The diagram source lives in the `.mermaid-fallback` element's text and nowhere else.
+	 * It used to be duplicated into a `data-mermaid-src` attribute, which the sanitizer then
+	 * removed from every flowchart in existence: DOMPurify drops any attribute whose value
+	 * contains `-->` as an mXSS defence, and `-->` is mermaid's arrow. Element text is not
+	 * subject to that rule, and the fallback had to carry the source anyway.
 	 */
 	#addMermaidRenderer(md: MarkdownIt): void {
 		const original = md.renderer.rules.fence;
@@ -208,7 +242,7 @@ export class MarkdownItEngine {
 			const lang = token.info.trim().split(/\s+/)[0].toLowerCase();
 			if (lang === 'mermaid') {
 				const line = token.map ? token.map[0] : 0;
-				return `<div class="mermaid-block code-line" data-line="${line}" data-mermaid-src="${escapeAttribute(token.content)}"><pre class="mermaid-fallback">${md.utils.escapeHtml(token.content)}</pre></div>\n`;
+				return `<div class="mermaid-block code-line" data-line="${line}"><pre class="mermaid-fallback">${md.utils.escapeHtml(token.content)}</pre></div>\n`;
 			}
 			return original
 				? original(tokens, idx, options, env, self)
@@ -227,13 +261,13 @@ export class MarkdownItEngine {
 
 	#addNamedHeaders(md: MarkdownIt): void {
 		const original = md.renderer.rules.heading_open;
-		md.renderer.rules.heading_open = (tokens: Token[], idx: number, options, env: unknown, self) => {
+		md.renderer.rules.heading_open = (tokens: Token[], idx: number, options, env, self) => {
 			const title = this.#tokenToPlainText(tokens[idx + 1]);
-			const renderEnv = env as RenderEnv;
-			const slug = renderEnv.slugifier ? renderEnv.slugifier.add(title) : this.slugifier.fromHeading(title);
+			const renderEnv = renderEnvOf(env);
+			const slug = renderEnv?.slugifier ? renderEnv.slugifier.add(title) : this.slugifier.fromHeading(title);
 			tokens[idx].attrSet('id', slug.value);
 
-			renderEnv.headings?.push({
+			renderEnv?.headings?.push({
 				level: Number(tokens[idx].tag.slice(1)) || 1,
 				text: title,
 				slug: slug.value,
@@ -266,8 +300,9 @@ export class MarkdownItEngine {
 	#addLinkRenderer(md: MarkdownIt): void {
 		const original = md.renderer.rules.link_open;
 
-		md.renderer.rules.link_open = (tokens: Token[], idx: number, options, env: RenderEnv, self) => {
+		md.renderer.rules.link_open = (tokens: Token[], idx: number, options, env, self) => {
 			const token = tokens[idx];
+			const renderEnv = renderEnvOf(env);
 			const href = token.attrGet('href');
 			// A string, including empty string, may be `href`.
 			if (typeof href === 'string') {
@@ -275,7 +310,7 @@ export class MarkdownItEngine {
 				// Resolve relative markdown links to absolute paths so the renderer can
 				// navigate to them without having to know the current document's folder.
 				if (href && !/^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith('#')) {
-					const resolved = this.#resolveLocalPath(href.split('#')[0], env);
+					const resolved = this.#resolveLocalPath(href.split('#')[0], renderEnv);
 					if (resolved) {
 						token.attrSet('data-resolved-path', resolved);
 					}
@@ -293,7 +328,7 @@ export class MarkdownItEngine {
 	 * Replaces the original `#toResourceUri`, which produced webview URIs.
 	 * Here local references become `mdr://` URLs served by the host.
 	 */
-	#toResourceUri(href: string, env: RenderEnv): string {
+	#toResourceUri(href: string, env: RenderEnv | undefined): string {
 		try {
 			if (href.startsWith('data:') || href.startsWith('mdr:')) {
 				return href;
@@ -319,8 +354,10 @@ export class MarkdownItEngine {
 	}
 
 	/** Resolve a document-relative or root-absolute reference to an absolute fs path. */
-	#resolveLocalPath(href: string, env: RenderEnv): string | undefined {
-		if (!href) {
+	#resolveLocalPath(href: string, env: RenderEnv | undefined): string | undefined {
+		// Without an env there is no document and no root to resolve against, so a relative
+		// reference has no answer — leave it as the document wrote it.
+		if (!href || !env) {
 			return undefined;
 		}
 
@@ -348,13 +385,17 @@ export class MarkdownItEngine {
 	}
 }
 
-function getMarkdownOptions(md: () => MarkdownIt): Options {
+function getMarkdownOptions(md: () => MarkdownIt): MarkdownItOptions {
 	// `highlight` is called by markdown-it's own fence renderer.
 	return {
 		html: true,
 		highlight: (str: string, lang?: string) => {
+			// markdown-it's `highlight` is synchronous, so highlight.js cannot be awaited from
+			// in here — `lazy.ts` loads it before the render when the document has fences. If
+			// it is not loaded, this is the same path an unknown language already took.
+			const hljs = getHighlighter();
 			lang = normalizeHighlightLang(lang);
-			if (lang && hljs.getLanguage(lang)) {
+			if (hljs && lang && hljs.getLanguage(lang)) {
 				try {
 					return hljs.highlight(str, {
 						language: lang,

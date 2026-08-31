@@ -15,10 +15,46 @@
  *  `extendMarkdownIt`. Here they're just plugins in a list.
  *--------------------------------------------------------------------------------------------*/
 
-import type MarkdownIt from 'markdown-it';
-import type { PluginSimple, PluginWithOptions } from 'markdown-it';
-import katexPlugin from '@vscode/markdown-it-katex';
+import type { MarkdownIt } from 'markdown-it';
 import { getConfig } from './config';
+
+/**
+ * markdown-it 15 ships its own typings and no longer exports the two plugin aliases
+ * `@types/markdown-it` used to provide. They were only ever these two shapes.
+ */
+export type PluginSimple = (md: MarkdownIt) => void;
+export type PluginWithOptions<T = unknown> = (md: MarkdownIt, options?: T) => void;
+
+/**
+ * KaTeX, loaded only once a document turns out to contain math — it is one of the two heaviest
+ * things in the graph. See `lazy.ts` for why that decision is made before rendering rather
+ * than after. Until it has loaded, `getPlugins()` leaves math out and `$x$` renders as the
+ * text it is.
+ */
+let katexPlugin: PluginWithOptions | undefined;
+
+export function isMathPluginLoaded(): boolean {
+	return katexPlugin !== undefined;
+}
+
+export async function loadMathPlugin(): Promise<void> {
+	if (katexPlugin) {
+		return;
+	}
+	// The package is CommonJS, and a dynamic import of it does not interop the way the static
+	// one did: depending on the bundler, `default` is either the plugin or the module object
+	// that holds it. Unwrapping one level covers both, and the alternative is a
+	// `plugin.apply is not a function` that only shows up in the bundled build.
+	const imported: unknown = (await import('@vscode/markdown-it-katex')).default;
+	const plugin = typeof imported === 'function'
+		? imported
+		: (imported as { default?: unknown } | undefined)?.default;
+
+	if (typeof plugin !== 'function') {
+		throw new TypeError('@vscode/markdown-it-katex did not export a plugin function');
+	}
+	katexPlugin = plugin as PluginWithOptions;
+}
 
 /**
  * Ported from vscode/extensions/markdown-math/src/extension.ts.
@@ -26,6 +62,9 @@ import { getConfig } from './config';
  * leak into the next.
  */
 function mathPlugin(md: MarkdownIt): MarkdownIt {
+	if (!katexPlugin) {
+		return md;
+	}
 	const options = {
 		enableFencedBlocks: true,
 		globalGroup: true,
@@ -35,7 +74,7 @@ function mathPlugin(md: MarkdownIt): MarkdownIt {
 		options.macros = { ...getConfig().mathMacros };
 		return true;
 	});
-	return md.use(katexPlugin as unknown as PluginWithOptions, options);
+	return md.use(katexPlugin, options);
 }
 
 /**
@@ -86,7 +125,8 @@ function taskListPlugin(md: MarkdownIt): MarkdownIt {
  */
 export function getPlugins(): PluginSimple[] {
 	const plugins: PluginSimple[] = [taskListPlugin];
-	if (getConfig().math) {
+	// Both conditions: the setting is the user's, and the load is the document's.
+	if (getConfig().math && isMathPluginLoaded()) {
 		plugins.push(mathPlugin);
 	}
 	// Mermaid is not a markdown-it plugin here — the engine emits a placeholder for

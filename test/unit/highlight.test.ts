@@ -9,14 +9,20 @@
  *  the ones it reaches only through an alias, and the ones `normalizeHighlightLang()` rewrites.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import hljs, { registeredLanguages } from '../../src/renderer/highlight';
 import { MarkdownItEngine } from '../../src/renderer/engine';
+import { ensureHighlighter } from '../../src/renderer/lazy';
 import { getPlugins } from '../../src/renderer/plugins';
 
 function render(text: string) {
 	return new MarkdownItEngine(getPlugins()).render(text).html;
 }
+
+// highlight.js is loaded on demand now, and the engine renders fences unhighlighted until it
+// is — the same output an unknown language gets. The app does this from `prepareForDocument`
+// before it paints; a test that renders directly has to do it itself.
+beforeAll(() => ensureHighlighter());
 
 describe('the language list', () => {
 	it('registers every language it names', () => {

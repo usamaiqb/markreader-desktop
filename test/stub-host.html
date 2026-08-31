@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!-- Copyright (c) 2026 DigiGate -->
+<!--
+	The stub host — D1 exit criterion 2, and the cheapest possible second consumer of the
+	document module.
+
+	A bare page: the `markdown-body` element, the document stylesheets, and a fake
+	`window.markreader`. No toolbar, no sidebar, no outline pane, no find bar, no `app.css`,
+	and no `shell.ts`. If `document.ts` renders here, it will render in an Android WebView,
+	because this page gives it strictly less than one.
+
+	That is what stops shell coupling creeping back: the moment `document.ts` reaches for an
+	element only the desktop chrome has, this page breaks and the desktop app does not.
+
+	It runs against the *unbundled* output, so a bare specifier that a bundler would have
+	resolved and a browser will not is caught here rather than on a device.
+
+	Open `out/renderer-esm/stub.html` after `npm run build:esm`. It needs a server rather than
+	`file://`, because ES modules are fetched under CORS:
+
+		npx http-server out/renderer-esm     # then open /stub.html
+-->
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<!-- The same policy the app page carries. `mdr:` is absent: this host serves document
+	     resources from its own origin, which is what Android does too. -->
+	<meta http-equiv="Content-Security-Policy"
+		content="default-src 'none'; img-src 'self' data: https:; media-src 'self' data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self';">
+	<title>MarkReader — stub host</title>
+
+	<!-- Exactly the document stylesheets. app.css is deliberately absent: if the document
+	     needs a rule from it, that rule is in the wrong file. -->
+	<link rel="stylesheet" href="css/markdown.css">
+	<link rel="stylesheet" href="css/highlight.css">
+	<link rel="stylesheet" href="css/theme.css">
+	<link rel="stylesheet" href="css/document-overrides.css">
+</head>
+
+<body class="vscode-dark wordWrap">
+	<div class="markdown-body" dir="auto" id="markdown-body"></div>
+
+	<script type="module">
+		import { DocumentView } from './document.js';
+		import { setResourceOrigin } from './util.js';
+		import { setConfig } from './config.js';
+
+		// Document resources are same-origin here, as they are on Android — so the origin is
+		// the page's own and `readFile` is an ordinary fetch rather than a second bridge.
+		setResourceOrigin(location.origin);
+
+		const SAMPLE = new URLSearchParams(location.search).get('doc') ?? 'kitchen-sink.md';
+
+		/**
+		 * The fake host. Everything the document module is allowed to assume about the app
+		 * around it, and nothing else — no capabilities, so this also exercises the degrade
+		 * paths a WebView host will take.
+		 */
+		const host = {
+			capabilities: { revealInFolder: false, windowBackground: false, watchesFiles: false },
+
+			async readFile(filePath) {
+				const response = await fetch(filePath);
+				if (!response.ok) {
+					return undefined;
+				}
+				return { path: filePath, text: await response.text() };
+			},
+
+			async openPath(filePath) {
+				const doc = await this.readFile(filePath);
+				if (doc) {
+					view.setDocument(doc, { preserveScroll: false });
+				}
+			},
+
+			async openExternal(url) {
+				console.log('[stub] openExternal', url);
+			},
+		};
+
+		const view = new DocumentView({
+			root: document.getElementById('markdown-body'),
+			host,
+		});
+
+		// Whatever a real host would draw its chrome from, printed instead. A shell subscribes
+		// to exactly these; this proves they fire without one.
+		view.on('headings', headings => console.log(`[stub] ${headings.length} headings`));
+		view.on('activeHeading', slug => console.log('[stub] active heading', slug));
+		view.on('find', state => console.log('[stub] find', state));
+		view.on('theme', state => console.log('[stub] theme', state));
+		view.on('document', doc => console.log('[stub] document', doc?.path));
+
+		setConfig({ theme: 'dark' });
+		view.applyTheme();
+		view.setWordWrap(true);
+
+		const documentPath = `${location.pathname.replace(/\/[^/]*$/, '')}/samples/${SAMPLE}`;
+		await host.openPath(documentPath);
+
+		// Read by the automated check, which waits for it rather than guessing at timing.
+		window.__STUB_READY__ = true;
+	</script>
+</body>
+
+</html>

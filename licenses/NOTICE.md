@@ -22,13 +22,20 @@ Files derived from VS Code, and how much they changed:
 | `src/renderer/engine.ts` | `extensions/markdown-language-features/src/markdownEngine.ts` | Adapted — VS Code API calls replaced |
 | `src/renderer/frontMatter.ts` | `extensions/markdown-language-features/src/extensions/yamlPreamble/yamlPreamble.ts` | Adapted — config and localization replaced |
 | `src/renderer/plugins.ts` (math) | `extensions/markdown-math/src/extension.ts` | Adapted — settings replaced |
-| `src/renderer/renderer.ts` | `extensions/markdown-language-features/preview-src/index.ts` | Adapted — editor scroll sync dropped; link handling, image and diagram hydration and the outline kept |
+| `src/renderer/document.ts` | `extensions/markdown-language-features/preview-src/index.ts` | Adapted — editor scroll sync dropped; link handling, image and diagram hydration and the outline kept. This was `renderer.ts` until the document/shell split |
 | `src/renderer/util.ts` | `extensions/markdown-language-features/src/util/dom.ts` | Adapted — `escapeAttribute` and `escapeHtml` only; the `mdr://` helpers are MarkReader's own |
 
 The MIT license text is reproduced in `licenses/vscode.txt`, which is where the per-file
 `SPDX-FileCopyrightText: Microsoft Corporation` headers point. Files marked *Verbatim* keep
 upstream's own header untouched, including its `License.txt` reference, so they stay
 byte-comparable against the vscode repo.
+
+Verbatim means verbatim, and it had stopped being true: `markdown.css` carried 44 lines of
+MarkReader's own front-matter rules, appended below the upstream content. They moved to
+`src/renderer/css/document-overrides.css`, which is where every local deviation belongs.
+`test/unit/vendored-files.test.ts` now pins all three files by hash, so the next such edit
+fails a test rather than going unnoticed — though a hash only proves *unchanged since*, not
+*matches upstream*. The diff against the vscode repo is still a manual step, and still owed.
 
 ## Bundled dependencies
 

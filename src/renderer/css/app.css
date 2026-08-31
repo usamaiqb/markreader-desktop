@@ -293,41 +293,8 @@ body.full-width #content {
 	max-width: none;
 }
 
-/* Heading anchor links, in the style of the GitHub / docs convention. */
-.markdown-body :is(h1, h2, h3, h4, h5, h6) {
-	position: relative;
-}
-
-.heading-anchor {
-	position: absolute;
-	left: -0.85em;
-	width: 0.85em;
-	opacity: 0;
-	text-decoration: none;
-	color: var(--mr-description-foreground);
-	font-weight: 400;
-	cursor: pointer;
-}
-
-.markdown-body :is(h1, h2, h3, h4, h5, h6):hover > .heading-anchor {
-	opacity: 1;
-}
-
-.heading-anchor:hover {
-	text-decoration: none;
-	color: var(--vscode-textLink-foreground);
-}
-
-/* Briefly flash a heading that was jumped to, so the target is obvious. */
-@keyframes mr-target-flash {
-	from { background-color: var(--mr-list-activeBackground); }
-	to { background-color: transparent; }
-}
-
-.mr-target-flash {
-	animation: mr-target-flash 1.2s ease-out;
-	border-radius: 3px;
-}
+/* Heading anchors and the jump-target flash moved to document-overrides.css — they style
+   elements the document module creates, so a document-only host needs them too. */
 
 /* Empty state */
 
@@ -446,84 +413,9 @@ body.finding #find-bar {
 	color: #ffffff;
 }
 
-/* ---------------------------------------------------------------------- mermaid */
-
-.mermaid-block {
-	margin: 0 0 16px;
-	padding: 12px;
-	border: 1px solid var(--vscode-widget-border);
-	border-radius: 4px;
-	background: var(--vscode-textCodeBlock-background);
-	overflow-x: auto;
-	text-align: center;
-}
-
-.mermaid-block > svg {
-	max-width: 100%;
-	height: auto;
-}
-
-/* Shown until mermaid has rendered, and kept if the diagram fails to parse. */
-.mermaid-block > .mermaid-fallback {
-	margin: 0;
-	border: 0;
-	background: transparent;
-	text-align: left;
-	white-space: pre-wrap;
-}
-
-.mermaid-block.rendered > .mermaid-fallback {
-	display: none;
-}
-
-.mermaid-block.failed {
-	border-color: var(--vscode-editorError-foreground);
-}
-
-.mermaid-block .mermaid-error {
-	margin-bottom: 6px;
-	color: var(--vscode-editorError-foreground);
-	text-align: left;
-	font-size: 0.9em;
-}
-
-/* ------------------------------------------------------------------------ katex */
-
-.katex-display {
-	overflow-x: auto;
-	overflow-y: hidden;
-	padding: 2px 0;
-}
-
-.katex {
-	/* Inherit the document text color rather than KaTeX's own default. */
-	color: inherit;
-}
-
-.katex-error {
-	color: var(--vscode-editorError-foreground);
-}
-
-/* Task lists, which markdown-it emits as plain checkbox inputs. */
-.markdown-body input[type="checkbox"] {
-	margin: 0 0.35em 0.15em 0;
-	vertical-align: middle;
-}
-
-.markdown-body li:has(> input[type="checkbox"]) {
-	list-style: none;
-	margin-left: -1.15em;
-}
-
-/* Tables scroll rather than forcing the page to scroll horizontally. */
-.markdown-body .table-wrapper {
-	overflow-x: auto;
-	margin-bottom: 0.7em;
-}
-
-.markdown-body .table-wrapper > table {
-	margin-bottom: 0;
-}
+/* Mermaid, KaTeX, task lists and the table wrapper moved to document-overrides.css. Every one
+   of them styles document content rather than chrome, and both hosts render document content;
+   only this file is desktop-only. */
 
 @media print {
 	#toolbar,

@@ -80,7 +80,7 @@ async function copyStatic() {
 		path.join(root, 'src/renderer/index.html'),
 		path.join(rendererOut, 'index.html'));
 
-	for (const file of ['markdown.css', 'highlight.css', 'theme.css', 'app.css']) {
+	for (const file of ['markdown.css', 'highlight.css', 'theme.css', 'document-overrides.css', 'app.css']) {
 		await fs.copyFile(
 			path.join(root, 'src/renderer/css', file),
 			path.join(rendererOut, 'css', file));

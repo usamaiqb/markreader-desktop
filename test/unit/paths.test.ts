@@ -6,7 +6,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
-import { basename, dirname, extname, isMarkdownPath, resolvePath } from '../../src/renderer/paths';
+import { basename, dirname, extname, isMarkdownPath, resolvePath, samePath } from '../../src/renderer/paths';
 
 describe('dirname', () => {
 	it('handles forward slashes', () => {
@@ -76,5 +76,21 @@ describe('isMarkdownPath', () => {
 	it('rejects everything else', () => {
 		expect(isMarkdownPath('x.txt')).toBe(false);
 		expect(isMarkdownPath('x')).toBe(false);
+	});
+});
+
+describe('samePath', () => {
+	it('ignores separator and case differences', () => {
+		expect(samePath('C:\\a\\b.md', 'c:/A/B.md')).toBe(true);
+	});
+
+	it('distinguishes different documents', () => {
+		expect(samePath('/a/b.md', '/a/c.md')).toBe(false);
+	});
+
+	it('treats a host-opaque virtual path as any other path', () => {
+		// Android hands the renderer `/saf/<token>/…`; nothing here may interpret it.
+		expect(samePath('/saf/t1/doc.md', '/saf/t1/doc.md')).toBe(true);
+		expect(samePath('/saf/t1/doc.md', '/saf/t2/doc.md')).toBe(false);
 	});
 });
