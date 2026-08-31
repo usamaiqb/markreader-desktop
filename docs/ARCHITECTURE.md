@@ -33,7 +33,12 @@ src/
     frontMatter.ts       ← yamlPreamble.ts, de-vscoded
     plugins.ts           ← markdown-math, plus a task-list plugin
     highlight.ts         highlight.js core + the explicit list of languages that ship
-    renderer.ts          app logic: links, outline, find, theming, mermaid
+    host.ts              the host contract, and the path space contract with it
+    document.ts          DocumentView: links, find, outline, theming, mermaid — shareable
+    shell.ts             desktop chrome: file list, outline pane, find bar, menus
+    renderer.ts          composition root: introduces the two
+    sanitizer.ts         the only place document HTML enters the DOM
+    lazy.ts              what a document needs (KaTeX, highlight.js) and loading only that
     config.ts            replaces MarkdownPreviewConfiguration
     paths.ts             browser-safe path helpers
     util.ts              escaping + mdr:// URI helpers
@@ -42,8 +47,21 @@ src/
       markdown.css       ← VS Code, verbatim
       highlight.css      ← VS Code, verbatim
       theme.css          the --vscode-* variable shim
-      app.css            application chrome
+      document-overrides.css  every local deviation from the two verbatim files, plus the
+                              document's own rules — RTL, mobile, mermaid, KaTeX, anchors
+      app.css            application chrome (desktop only)
 ```
+
+`renderer/` is split so that a second host can load only part of it. `document.ts` owns
+everything inside the reading surface and touches no DOM outside its root; `shell.ts` owns the
+chrome and never reaches into the document. They meet through five events and the
+`DocumentHost` interface. An Android WebView will load the first and supply its own second.
+
+Paths crossing that interface are **opaque to the renderer** — it does string maths on them
+and hands the result back, so a host is free to make a path mean whatever it likes. The
+contract is stated in full at the top of `renderer/host.ts` and enforced by
+`test/unit/opaque-paths.test.ts`, which runs the same cases over a POSIX path, a Windows path
+and an Android `/saf/<token>/…` virtual path.
 
 The renderer never talks to the backend directly. It calls `window.markreader`, which
 `src/bridge/bridge.ts` implements with `invoke()` and `listen()` — one method per command, and
@@ -96,9 +114,36 @@ WebView2 supports no non-standard schemes, so on Windows the runtime maps
 `asLocalResourceUri()` in `util.ts` emits whichever form the platform needs, and the Rust
 handler accepts both. This is also why the page's CSP lists `http://mdr.localhost`.
 
-Because this is a local reader, the protocol handler will serve any file the user can read.
-If you want it locked to the opened folder, add a prefix check in `file_path()` in
-`src-tauri/src/protocol.rs`.
+The handler serves only from `ResourceRoots`: the directory of the open document, and the
+opened folder when there is one. Both are canonicalized, so neither a `..` segment nor a
+symlink reaches outside them, and anything else gets a 404 — the same answer as a file that
+does not exist, so a document cannot probe for what is there.
+
+It used to serve any file the user could read, which was a defensible trade for a local reader
+and is not one any more: the page renders untrusted document HTML, and `img-src` has to allow
+`https:` for documents that legitimately reference remote images. Those two together are a
+read-anything-and-beacon-it-out channel. This is the same scoping VS Code applies with
+`localResourceRoots` on the webview the preview came from.
+
+The visible cost: a document that references an image *above* its own folder, with no folder
+open, no longer loads it. Open the containing folder and it works.
+
+## Security
+
+The page executes untrusted content — `markdown-it` runs with `html: true`, because a Markdown
+reader that drops raw HTML is not much of one. Four layers, none of which is sufficient alone:
+
+| Layer | Where | Stops |
+| --- | --- | --- |
+| CSP | `tauri.conf.json` (header) and `index.html` (meta) | Inline handlers and injected scripts — `script-src 'self'` with no `'unsafe-inline'` |
+| Sanitizer | `renderer/sanitizer.ts`, the only place document HTML enters the DOM | Scripts, frames, forms, document stylesheets, `javascript:` URLs |
+| Resource roots | `protocol.rs` | Reads outside the open document's folder |
+| Scheme allowlist | `commands.rs`, `is_openable_external` | Handing anything but `http`/`https`/`mailto` to the OS |
+
+Two notes for anyone changing this. The sanitizer drops any attribute whose value contains
+`-->` (DOMPurify's mXSS defence, no opt-out) — which is why the mermaid diagram source travels
+as element text rather than an attribute. And `style` attributes stay allowed, because KaTeX
+lays out its output with them; `<style>` elements do not.
 
 ## Settings
 
@@ -154,12 +199,58 @@ with (`set_window_background`), so resizing never flashes white behind the page.
 - `markdown.css` still contains the diff-preview rules, since it's copied verbatim. They never
   match, because no diff markup is emitted. Kept unmodified so the file stays diffable against
   upstream.
-- Bundle size is dominated by `mermaid`, which is already a lazy chunk. `highlight.js` used to
-  share that distinction; `highlight.ts` registers an explicit list of 55 languages on the core
-  instead of importing all ~190, which is half the eagerly-loaded bundle. Adding a language
-  means adding a line there.
+- **Nothing heavy is loaded until a document needs it.** mermaid, highlight.js and KaTeX are
+  all lazy chunks, and KaTeX's 1.4MB stylesheet is injected on demand rather than linked in
+  the page. `lazy.ts` decides from the document text, *before* the render, so a document is
+  painted once and complete instead of reflowing as modules arrive. That took the entry bundle
+  from 1.6MB to 598KB.
+
+  Detection deliberately errs towards loading: any `$` counts as math. A module loaded
+  needlessly renders exactly as before, whereas a missed one renders `$x^2$` as text.
+- `highlight.ts` registers an explicit list of 55 languages on the highlight.js core instead of
+  importing all ~190. Adding a language means adding a line there.
 - The tests take no screenshots. The webview cannot capture its own window, so visual review
   means running the app and using the OS screenshot tool.
+
+## The unbundled build
+
+`npm run build` produces the bundle Tauri ships. `npm run build:esm` produces the artifact an
+Android WebView will load: **our code as plain ES modules, libraries as vendored single files.**
+The point of having both is that they are the same source — "works bundled, breaks unbundled"
+is a whole class of bug, and it is one we would otherwise meet on a device.
+
+```
+out/renderer-esm/
+  document.js  engine.js  shell.js  …   13 modules, 92kb, unminified, 1:1 with the source
+  vendor/                               6 libraries, minified, self-contained
+  css/                                  the document stylesheets, plus katex.css
+  stub.html  samples/                   the stub host and something for it to render
+```
+
+`scripts/build-esm.mjs` does three things: `tsc` emits our code one file in, one file out; each
+library is prebuilt into one ESM file; then a rewrite pass points every import at a real file —
+adding the `.js` extension `tsc` omits, and swapping bare specifiers for vendored paths. Source
+keeps the upstream specifier, so the ported VS Code files stay diffable.
+
+Libraries are *built*, not copied, because almost none ship something a browser loads directly:
+`@vscode/markdown-it-katex` is CommonJS only, and `highlight.js`'s `es/` entry points re-export
+its CommonJS. Two traps worth knowing:
+
+- Building the KaTeX plugin with `katex` marked external leaves a `__require("katex")` shim
+  whose body throws. It builds clean and fails at the first document with math. KaTeX has to be
+  baked in, which is why that file is 269kb.
+- Flattening mermaid loses its internal lazy loading of diagram types. Acceptable here because
+  the whole of mermaid is already behind one dynamic `import()`, but it is why it is 3.4MB
+  rather than the 2.7MB the Android plan budgeted.
+
+`npm run verify:esm` checks the result: every import resolves, no bare specifiers survive, no
+throwing shims, and — under jsdom — the modules actually execute and render a document.
+
+`npm run serve:esm` then `http://localhost:8099/stub.html` opens the stub host: the bare page
+from D1's exit criterion 2, with no `app.css` and no `shell.ts`. If the document module renders
+there it will render in a WebView, because that page gives it strictly less than one. It is
+also the regression test for shell coupling — the moment `document.ts` reaches for an element
+only the desktop chrome has, the stub breaks and the app does not.
 
 ## Notes on the build
 
