@@ -11,7 +11,7 @@
 	"app": {
 		"withGlobalTauri": false,
 		"security": {
-			"csp": null
+			"csp": "default-src 'none'; img-src 'self' mdr: http://mdr.localhost data: https:; media-src 'self' mdr: http://mdr.localhost data: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' mdr: http://mdr.localhost data:; connect-src 'self' mdr: http://mdr.localhost ipc: http://ipc.localhost"
 		}
 	},
 	"bundle": {

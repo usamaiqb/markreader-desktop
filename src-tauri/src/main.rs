@@ -49,6 +49,8 @@ pub struct AppState {
 	pub startup_file: Mutex<Option<PathBuf>>,
 	pub window_shown: AtomicBool,
 	pub smoke: Option<smoke::Smoke>,
+	/// Which directories the `mdr://` scheme will serve from. See `protocol::ResourceRoots`.
+	pub resource_roots: Mutex<protocol::ResourceRoots>,
 }
 
 fn main() {
@@ -68,6 +70,7 @@ fn main() {
 			.smoke_script
 			.clone()
 			.map(|script| smoke::Smoke::new(script, cli.smoke_out.clone())),
+		resource_roots: Mutex::new(protocol::ResourceRoots::default()),
 	};
 
 	tauri::Builder::default()

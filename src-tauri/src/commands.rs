@@ -68,10 +68,20 @@ pub fn read_document(app: AppHandle, path: String) -> Option<MarkDocument> {
 	document::read_or_report(&app, &document::resolve(Path::new(&path)))
 }
 
+/// The only schemes a document may ask the OS to open.
+///
+/// This is the last line rather than the first — the renderer checks the scheme before it
+/// calls, and the sanitizer strips `javascript:` before that. It is here because a link in an
+/// untrusted document should not decide what the platform launches, and this is the one place
+/// that decision cannot be routed around.
+fn is_openable_external(url: &str) -> bool {
+	let lowered = url.to_lowercase();
+	lowered.starts_with("http://") || lowered.starts_with("https://") || lowered.starts_with("mailto:")
+}
+
 #[tauri::command]
 pub fn open_external(app: AppHandle, url: String) {
-	let lowered = url.to_lowercase();
-	if lowered.starts_with("http://") || lowered.starts_with("https://") || lowered.starts_with("mailto:") {
+	if is_openable_external(&url) {
 		let _ = app.opener().open_url(url, None::<&str>);
 	}
 }
@@ -157,5 +167,46 @@ fn parse_hex_color(value: &str) -> Option<Color> {
 		6 => Some(Color(pair(0), pair(2), pair(4), 255)),
 		8 => Some(Color(pair(0), pair(2), pair(4), pair(6))),
 		_ => None,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn opens_the_three_allowed_schemes() {
+		assert!(is_openable_external("https://example.com/x"));
+		assert!(is_openable_external("http://example.com/x"));
+		assert!(is_openable_external("mailto:someone@example.com"));
+	}
+
+	#[test]
+	fn ignores_the_case_a_document_wrote_the_scheme_in() {
+		assert!(is_openable_external("HTTPS://example.com"));
+		assert!(is_openable_external("MailTo:someone@example.com"));
+	}
+
+	#[test]
+	fn refuses_everything_else() {
+		for url in [
+			"javascript:alert(1)",
+			"vbscript:msgbox(1)",
+			"file:///etc/passwd",
+			"data:text/html,<script>alert(1)</script>",
+			"ms-msdt:/id",
+			"smb://host/share",
+			"mdr://localhost/C:/secret.txt",
+			"",
+		] {
+			assert!(!is_openable_external(url), "{url} should not be openable");
+		}
+	}
+
+	#[test]
+	fn refuses_a_scheme_that_merely_contains_an_allowed_one() {
+		// A prefix check, not a substring one.
+		assert!(!is_openable_external("javascript:https://example.com"));
+		assert!(!is_openable_external(" https://example.com"));
 	}
 }

@@ -151,6 +151,11 @@ pub fn open(app: &AppHandle, path: &Path) {
 		if let Ok(mut watcher) = state.watcher.lock() {
 			watcher.watch(&path, app.clone());
 		}
+		// Before the document reaches the page, so its assets can be fetched the moment it
+		// renders and nothing outside its directory can be.
+		if let Ok(mut roots) = state.resource_roots.lock() {
+			roots.set_document(&path);
+		}
 	}
 
 	let _ = app.emit("document:opened", doc);
@@ -167,6 +172,13 @@ pub fn open(app: &AppHandle, path: &Path) {
 /// Scans a folder and pushes the sidebar list, as `promptOpenFolder` did.
 pub fn open_folder(app: &AppHandle, root: &Path) {
 	let root = resolve(root);
+
+	if let Some(state) = app.try_state::<AppState>() {
+		if let Ok(mut roots) = state.resource_roots.lock() {
+			roots.set_folder(&root);
+		}
+	}
+
 	let entries = crate::tree::list_markdown_tree(&root);
 	let _ = app.emit(
 		"folder:opened",
