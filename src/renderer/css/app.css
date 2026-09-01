@@ -404,18 +404,9 @@ body.finding #find-bar {
 	font-variant-numeric: tabular-nums;
 }
 
-::highlight(mr-find-match) {
-	background-color: rgba(234, 92, 0, 0.33);
-}
-
-::highlight(mr-find-current) {
-	background-color: rgba(234, 92, 0, 0.8);
-	color: #ffffff;
-}
-
-/* Mermaid, KaTeX, task lists and the table wrapper moved to document-overrides.css. Every one
-   of them styles document content rather than chrome, and both hosts render document content;
-   only this file is desktop-only. */
+/* Mermaid, KaTeX, task lists, the table wrapper and the find highlights moved to
+   document-overrides.css. Every one of them styles document content rather than chrome, and
+   both hosts render document content; only this file is desktop-only. */
 
 @media print {
 	#toolbar,

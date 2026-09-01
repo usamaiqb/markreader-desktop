@@ -101,6 +101,32 @@ describe('the overrides file that exists so those stay untouched', () => {
 		expect(positions).toEqual([...positions].sort((a, b) => a - b));
 	});
 
+	it('carries a paint for every highlight the document registers', () => {
+		// The bug this exists for: `document.ts` registered `mr-find-match`, and the only
+		// `::highlight(mr-find-match)` rule was in `app.css` — so find highlighted on desktop and
+		// painted nothing on Android, which vendors the document stylesheets and not the chrome
+		// one. A custom highlight with no rule for its name is simply invisible: nothing throws,
+		// and the feature reads as half-implemented rather than as a stylesheet in the wrong file.
+		const documentModule = fs.readFileSync(
+			path.join(REPO_ROOT, 'src/renderer/document.ts'), 'utf8',
+		);
+		const registered = [...documentModule.matchAll(/CSS\.highlights\.set\('([^']+)'/g)]
+			.map(match => match[1]);
+
+		expect(registered.length, 'nothing registers a highlight any more').toBeGreaterThan(0);
+
+		const documentStyles = ['markdown.css', 'theme.css', 'document-overrides.css']
+			.map(name => fs.readFileSync(path.join(REPO_ROOT, 'src/renderer/css', name), 'utf8'))
+			.join('\n');
+
+		for (const name of registered) {
+			expect(
+				documentStyles,
+				`::highlight(${name}) is in no document stylesheet, so it paints nothing`,
+			).toContain(`::highlight(${name})`);
+		}
+	});
+
 	it('is copied into the build output', () => {
 		// A stylesheet the page links but the build never copies 404s at runtime, which shows
 		// up as unstyled output rather than an error.

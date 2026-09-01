@@ -48,7 +48,8 @@ src/
       highlight.css      ← VS Code, verbatim
       theme.css          the --vscode-* variable shim
       document-overrides.css  every local deviation from the two verbatim files, plus the
-                              document's own rules — RTL, mobile, mermaid, KaTeX, anchors
+                              document's own rules — RTL, mobile, mermaid, KaTeX, anchors,
+                              find highlights
       app.css            application chrome (desktop only)
 ```
 
@@ -251,6 +252,13 @@ from D1's exit criterion 2, with no `app.css` and no `shell.ts`. If the document
 there it will render in a WebView, because that page gives it strictly less than one. It is
 also the regression test for shell coupling — the moment `document.ts` reaches for an element
 only the desktop chrome has, the stub breaks and the app does not.
+
+**A stylesheet can couple the same way, and the stub will not tell you.** A rule for something
+`document.ts` draws, left in `app.css`, renders on desktop and silently does not on a host that
+loads only the document stylesheets — the find highlights were exactly that, and a custom
+highlight with no `::highlight()` rule for its name paints nothing and throws nothing. There is
+no visual assertion to catch it, so `vendored-files.test.ts` checks the one case that fails
+invisibly: every name passed to `CSS.highlights.set()` has a rule in a document stylesheet.
 
 ## Notes on the build
 
