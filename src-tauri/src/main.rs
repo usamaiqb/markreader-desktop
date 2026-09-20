@@ -24,8 +24,8 @@ mod tree;
 mod watcher;
 
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tauri::utils::config::Color;
@@ -54,6 +54,11 @@ pub struct AppState {
 }
 
 fn main() {
+	let exit_code = run();
+	std::process::exit(exit_code);
+}
+
+fn run() -> i32 {
 	let cli = cli::from_env();
 
 	#[cfg(windows)]
@@ -73,7 +78,10 @@ fn main() {
 		resource_roots: Mutex::new(protocol::ResourceRoots::default()),
 	};
 
-	tauri::Builder::default()
+	let exit_code = Arc::new(AtomicI32::new(0));
+	let requested = exit_code.clone();
+
+	let loop_code = tauri::Builder::default()
 		// Replaces `requestSingleInstanceLock` + the `second-instance` event: a second launch
 		// hands its arguments over and exits.
 		.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -150,7 +158,15 @@ fn main() {
 		})
 		.build(tauri::generate_context!())
 		.expect("failed to start MarkReader")
-		.run(|app, event| match event {
+		.run_return(move |app, event| match event {
+			// The code given to `AppHandle::exit` reaches this event but never the process:
+			// tauri-runtime-wry answers RequestExit with `ControlFlow::Exit`, which is
+			// `ExitWithCode(0)`, so `run_return` yields 0 however the app was asked to quit.
+			// A failing `--smoke` run therefore looked like a passing one. Catch the code on
+			// its way past and let `main` apply it. `code` is None for an ordinary quit.
+			tauri::RunEvent::ExitRequested { code: Some(code), .. } => {
+				requested.store(code, Ordering::SeqCst);
+			}
 			// macOS: double-clicking a .md in Finder.
 			#[cfg(target_os = "macos")]
 			tauri::RunEvent::Opened { urls } => {
@@ -172,6 +188,12 @@ fn main() {
 			}
 			_ => {}
 		});
+
+	// An ordinary quit leaves the cell at its default and the loop's own code stands.
+	match exit_code.load(Ordering::SeqCst) {
+		0 => loop_code,
+		code => code,
+	}
 }
 
 /// External links open in the system browser, never in the app window. Everything the app
