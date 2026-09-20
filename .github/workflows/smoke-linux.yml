@@ -1,0 +1,73 @@
+name: Smoke (Linux)
+
+# Linux smoke test, on its own.
+#
+# The full CI matrix is three OSes plus bundling; this is the cheapest slice of
+# it - Linux (billed at 1x) running only the smoke test - so a Linux-only
+# failure can be chased without paying for the rest. ci.yml stays disabled
+# while this is in use.
+#
+# Runs on push to ci/** rather than workflow_dispatch alone, because a
+# dispatch-only workflow is not offered in the Actions tab until the file is on
+# the default branch, and this one is not. Every push to such a branch spends
+# runner minutes, so batch your commits.
+on:
+  push:
+    branches: [ 'ci/**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Smoke test only
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl wget file \
+            libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            xvfb
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      # Must precede any cargo step: tauri::generate_context!() validates that
+      # frontendDist (../out/renderer) exists at compile time.
+      - name: Build frontend
+        run: npm run build
+
+      - name: Smoke test (headless)
+        run: xvfb-run -a npm test
+
+      # The in-page assertions are reported over IPC and written here; on a
+      # failure this is the only place the per-check detail survives.
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: smoke-report-linux
+          path: test/tmp/smoke-report.json
+          if-no-files-found: warn
