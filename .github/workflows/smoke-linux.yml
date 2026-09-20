@@ -1,11 +1,13 @@
-name: Smoke (Linux)
+name: Linux (smoke, package, bundle)
 
-# Linux smoke test, on its own.
+# The Linux half of CI, from the smoke test onwards.
 #
 # The full CI matrix is three OSes plus bundling; this is the cheapest slice of
-# it - Linux (billed at 1x) running only the smoke test - so a Linux-only
-# failure can be chased without paying for the rest. ci.yml stays disabled
-# while this is in use.
+# it - Linux, billed at 1x - so the steps that have never had a successful run
+# can be chased without paying for Windows at 2x and macOS at 10x. The cheap
+# JS and Rust checks (typecheck, lint, unit tests, clippy, cargo test) are left
+# out: those already pass on all three OSes. ci.yml stays disabled while this
+# is in use.
 #
 # Runs on push to ci/** rather than workflow_dispatch alone, because a
 # dispatch-only workflow is not offered in the Actions tab until the file is on
@@ -21,7 +23,7 @@ permissions:
 
 jobs:
   smoke:
-    name: Smoke test only
+    name: Smoke, package and bundle
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,12 +64,32 @@ jobs:
       - name: Smoke test (headless)
         run: xvfb-run -a npm test
 
-      # The in-page assertions are reported over IPC and written here; on a
-      # failure this is the only place the per-check detail survives.
-      - name: Upload smoke report
+      - name: Build release binary
+        run: npm run package:dir
+
+      - name: Verify packaged app (headless)
+        run: xvfb-run -a npm run verify:packaged
+
+      - name: Bundle installers
+        run: npx tauri build --bundles deb,appimage
+
+      # Both suites report over IPC into test/tmp; on a failure that is the only
+      # place the per-check detail survives the runner. always(), so a failing
+      # step above still hands back its report.
+      - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: smoke-report-linux
-          path: test/tmp/smoke-report.json
+          name: reports-linux
+          path: |
+            test/tmp/smoke-report.json
+            test/tmp/packaged-report.json
           if-no-files-found: warn
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: markreader-linux
+          path: |
+            src-tauri/target/release/markreader
+            src-tauri/target/release/bundle/**
