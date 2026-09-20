@@ -232,6 +232,15 @@
 
 		log('');
 		log('--- theme switch ---');
+		// The theme button toggles against whatever is showing, and the default mode is
+		// 'system' — so the starting theme is the host's colour scheme, not a constant. Settle
+		// on dark first, or the single click below lands on dark wherever no dark preference
+		// is set, which is every CI runner.
+		if (!document.body.classList.contains('vscode-dark')) {
+			document.getElementById('btn-theme').click();
+			await waitFor('dark theme applied', () => document.body.classList.contains('vscode-dark'));
+		}
+
 		document.getElementById('btn-theme').click();
 		await waitFor('light theme applied', () => document.body.classList.contains('vscode-light'));
 
