@@ -1,10 +1,17 @@
 name: CI
 
+# TEMPORARILY DISABLED. No automatic triggers - nothing runs on push, PR or tag.
+# A run can still be started by hand from the Actions tab.
+#
+# To re-enable, replace the `on:` block below with:
+#
+#   on:
+#     pull_request:
+#       branches: [ main ]
+#     push:
+#       branches: [ main ]
+#
 on:
-  pull_request:
-    branches: [ main ]
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:
