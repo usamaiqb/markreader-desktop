@@ -102,9 +102,17 @@ async function main() {
 		report.failures.length === 0, report.failures.join(', '));
 	check('the packaged app exits cleanly', code === 0, `exit code ${code}`);
 
+	// Subsystems a headless runner does not have still complain on stderr, with "error" in the
+	// text: no accessibility bus (AT-SPI/dbind), no GPU (EGL/DRI3/Mesa), no sound theme
+	// (canberra), no settings daemon (dconf). Windows has its own parting shot as the window
+	// class goes. None of it says anything about the app.
+	const environmental =
+		/AT-SPI|org\.a11y\.Bus|dbind-WARNING|libEGL|DRI3|MESA-LOADER|swrast|canberra|dconf-WARNING|Chrome_WidgetWin|unregister class/i;
+
 	const errors = stderr.join('').split('\n')
 		.filter(line => /error|ERR_|failed/i.test(line))
-		.filter(line => !/mermaid|Parse error|Syntax error|Chrome_WidgetWin|unregister class/i.test(line));
+		.filter(line => !/mermaid|Parse error|Syntax error/i.test(line))
+		.filter(line => !environmental.test(line));
 	check('no errors on stderr', errors.length === 0, errors.slice(0, 3).join(' | '));
 
 	// The report covers loading settings; saving them ends up on disk, where only this process
