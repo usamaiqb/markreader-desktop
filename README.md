@@ -1,12 +1,12 @@
 # MarkReader
 
-A fast, standalone desktop Markdown reader. It renders Markdown exactly like VS Code's preview —
-because the stylesheets *are* VS Code's stylesheets — without needing VS Code installed.
+A fast, standalone desktop Markdown reader. It renders Markdown exactly like VS Code's
+preview — the stylesheets are the same files, carried over unchanged — with no editor required.
 
 ## Features
 
-- **VS Code-faithful rendering** — CommonMark + GFM tables, syntax highlighting, math (KaTeX),
-  and mermaid diagrams, styled with the real VS Code CSS
+- **Faithful rendering** — CommonMark + GFM tables, syntax highlighting, math (KaTeX), and
+  mermaid diagrams, styled by those same stylesheets
 - **Open from anywhere** — file picker, drag-and-drop, terminal, or double-click a `.md` file
 - **Folder browsing** — open a folder and browse its Markdown files in a sidebar
 - **Live reload** — the open document re-renders on save, holding your scroll position
