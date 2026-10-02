@@ -18,7 +18,7 @@
 		"active": true,
 		"targets": ["nsis", "deb", "appimage"],
 		"publisher": "DigiGate",
-		"copyright": "Copyright (C) 2025 DigiGate",
+		"copyright": "Copyright (C) 2026 DigiGate",
 		"category": "Utility",
 		"shortDescription": "Markdown reader",
 		"longDescription": "A standalone Markdown reader built from VS Code's Markdown preview.",
