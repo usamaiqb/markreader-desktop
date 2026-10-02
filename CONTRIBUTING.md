@@ -3,11 +3,13 @@
 Thanks for wanting to help with MarkReader. This project follows standard open-source
 practices: Conventional Commits, PR-based contributions, and a release pipeline in CI.
 
+Taking part means following the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Setup
 
 Prerequisites:
 
-- Node.js 20+ (with npm)
+- Node.js 22.22+ or 24+ (with npm) — CI builds and tests on 24
 - The Rust toolchain (`rustup`)
 - On Windows: the MSVC build tools and the WebView2 runtime — `npx tauri info` checks all three
 - On Linux: the [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/)

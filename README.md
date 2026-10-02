@@ -19,7 +19,7 @@ because the stylesheets *are* VS Code's stylesheets — without needing VS Code 
 
 ## Download
 
-Installers for Windows, Linux, and macOS are published on the
+Each tagged release publishes installers for Windows, Linux, and macOS on the
 [Releases page](https://github.com/usamaiqb/markreader-desktop/releases):
 
 | Platform | Format |
@@ -27,6 +27,9 @@ Installers for Windows, Linux, and macOS are published on the
 | Windows | `.exe` (NSIS installer) |
 | Linux | `.deb` and `.AppImage` |
 | macOS | `.dmg` |
+
+No version has been tagged yet, so that page is empty — until the first release,
+[build from source](#building-from-source).
 
 Once installed, double-clicking any `.md` or `.markdown` file opens it in MarkReader.
 
@@ -73,6 +76,7 @@ Requires the Rust toolchain, and on Windows the MSVC build tools and WebView2 ru
 - [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) — platform-specific quirks and workarounds
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — the standards expected of everyone taking part
 
 ## License
 

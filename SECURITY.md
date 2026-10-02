@@ -5,10 +5,9 @@ beyond loading document resources.
 
 ## Reporting a vulnerability
 
-If you find a security issue, **do not** open a public issue. Report it privately instead:
-
-- Open a [private security advisory](https://github.com/usamaiqb/markreader-desktop/security/advisories/new)
-- Or email the maintainers directly (see the repository owner for contact details)
+If you find a security issue, **do not** open a public issue. Report it privately by opening a
+[security advisory](https://github.com/usamaiqb/markreader-desktop/security/advisories/new) —
+that draft is visible only to you and the maintainers until it is published.
 
 Please include:
 
