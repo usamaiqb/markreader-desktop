@@ -1,0 +1,92 @@
+name: Linux (package, verify, bundle)
+
+# Whatever is left of the Linux leg that has not yet had a successful run.
+#
+# The full CI matrix is three OSes plus bundling; this is the cheapest slice of
+# it - Linux, billed at 1x - so the remaining failures can be chased without
+# paying for Windows at 2x and macOS at 10x. ci.yml stays disabled while this
+# is in use.
+#
+# Steps drop out of this file as they go green, so each run is only the part
+# still in question. Gone so far: typecheck, lint, unit tests, clippy and
+# cargo test (passed on all three OSes in the first CI run), and the smoke
+# test (passed here). The full matrix re-covers all of them once ci.yml is
+# switched back on.
+#
+# Runs on push to ci/** rather than workflow_dispatch alone, because a
+# dispatch-only workflow is not offered in the Actions tab until the file is on
+# the default branch, and this one is not. Every push to such a branch spends
+# runner minutes, so batch your commits.
+on:
+  push:
+    branches: [ 'ci/**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Package, verify and bundle
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl wget file \
+            libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            xvfb
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      # No separate frontend build: with the smoke test gone there is no plain
+      # cargo step left, and this goes through the Tauri CLI, whose
+      # beforeBuildCommand (npm run build:prod) produces frontendDist itself.
+      - name: Build release binary
+        run: npm run package:dir
+
+      - name: Verify packaged app (headless)
+        run: xvfb-run -a npm run verify:packaged
+
+      - name: Bundle installers
+        run: npx tauri build --bundles deb,appimage
+
+      # The assertions report over IPC into test/tmp; on a failure that is the
+      # only place the per-check detail survives the runner. always(), so a
+      # failing step above still hands back its report.
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report-linux
+          path: test/tmp/packaged-report.json
+          if-no-files-found: warn
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: markreader-linux
+          path: |
+            src-tauri/target/release/markreader
+            src-tauri/target/release/bundle/**
