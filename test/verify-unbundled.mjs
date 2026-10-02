@@ -30,7 +30,7 @@ function check(name, ok, detail = '') {
 	}
 }
 
-const SPECIFIER_PATTERN = /(?:\bfrom\s*|\bimport\s*\(\s*)(['"])([^'"]+)\1/g;
+const SPECIFIER_PATTERN = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"]+)\1/g;
 
 function specifiersIn(source) {
 	return [...source.matchAll(SPECIFIER_PATTERN)].map(match => match[2]);
@@ -65,9 +65,9 @@ async function main() {
 	// them for import syntax finds `x.from,` and template-literal fragments instead — they get
 	// the self-containment checks below rather than this one. The rewrite pass only ever
 	// touches our code anyway, so this is where its output has to be right.
-	const files = (await fs.readdir(out))
-		.filter(name => name.endsWith('.js'))
-		.map(name => path.join(out, name));
+	// At any depth: the files copied verbatim from VS Code keep upstream's folder layout.
+	const files = (await jsFilesUnder(out))
+		.filter(file => !file.startsWith(path.join(out, 'vendor') + path.sep));
 	const unresolved = [];
 	const bare = [];
 
@@ -120,9 +120,15 @@ async function main() {
 	console.log('--- the stub host ---');
 
 	const stub = await fs.readFile(path.join(out, 'stub.html'), 'utf8');
+	const stubScript = await fs.readFile(path.join(out, 'stub.js'), 'utf8').catch(() => '');
 	const referenced = [...stub.matchAll(/(?:href|src)="([^"]+)"/g)].map(m => m[1])
-		.concat(specifiersIn(stub))
+		.concat(specifiersIn(stubScript))
 		.filter(ref => ref.startsWith('./') || ref.startsWith('css/'));
+
+	// The stub carries the app's CSP, whose `script-src 'self'` blocks inline scripts. jsdom
+	// enforces no CSP, so the render check below would pass with the page blank in a browser.
+	check('the stub has no inline script for its CSP to block',
+		!/<script(?![^>]*\ssrc=)[^>]*>/.test(stub) && stubScript.length > 0);
 
 	const missing = [];
 	for (const ref of referenced) {
@@ -136,7 +142,7 @@ async function main() {
 	// The stub is the document module's second consumer, so app.css must not be one of them.
 	// Matched as a link rather than as text — the stub's own comment says why it is absent.
 	check('the stub loads no desktop chrome', !/<link[^>]+app\.css/.test(stub));
-	check('the stub loads no desktop shell', !/shell\.js|renderer\.js/.test(stub));
+	check('the stub loads no desktop shell', !/shell\.js|renderer\.js/.test(stub + stubScript));
 	check('a sample document is available to it', await exists(path.join(out, 'samples/kitchen-sink.md')));
 
 	console.log('');

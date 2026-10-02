@@ -4,7 +4,7 @@
 /*---------------------------------------------------------------------------------------------
  *  The files copied verbatim from VS Code, pinned byte for byte.
  *
- *  `licenses/NOTICE.md` records these three as *Verbatim*, which is a deliberate design and not
+ *  `licenses/NOTICE.md` records these as *Verbatim*, which is a deliberate design and not
  *  a formality: local deviation is quarantined in files we own, so the copies stay diffable
  *  against the vscode repo when upstream moves. Editing one in place to fix RTL or add a media
  *  query would destroy that silently, and nothing would notice for months.
@@ -26,8 +26,8 @@
  *  and the three properties that genuinely deviate are logical-property overrides in
  *  `document-overrides.css`.
  *
- *  The upstream diff has since been run against `microsoft/vscode` `main`: both stylesheets
- *  match it exactly, apart from the single `Ported verbatim from …` marker line each carries.
+ *  The upstream diff was last run against `microsoft/vscode` `main` at `57b4202903e`
+ *  (2026-10-02): all of them are byte-identical to it, so the hashes below are upstream's own.
  *
  *  Raw bytes are hashed rather than normalized text, which `.gitattributes` makes safe: it
  *  pins `eol=lf` for exactly these files, since a Windows clone would otherwise get CRLF and
@@ -54,20 +54,44 @@ const VENDORED: readonly VendoredFile[] = [
 	{
 		path: 'src/renderer/css/markdown.css',
 		origin: 'extensions/markdown-language-features/media/markdown.css',
-		bytes: 11551,
-		sha256: '9c7fc4016a05a953820e7dd83506cecc31c610a19d137142f21b10bed7c0ff2a',
+		bytes: 11460,
+		sha256: '31acba626be3846f2a9b78421ce55e94feb5446d2b39bd06ab0453c0a010092d',
 	},
 	{
 		path: 'src/renderer/css/highlight.css',
 		origin: 'extensions/markdown-language-features/media/highlight.css',
-		bytes: 3108,
-		sha256: '427a82c14e421dbbfa6c595f5623ce25579424f203b6506a1dac4bcd13ad719b',
+		bytes: 3016,
+		sha256: 'b73e0ecc7a5b91532f4359206f082b0d73a7d1f7bea68d8853a30385cf85c756',
 	},
 	{
 		path: 'src/renderer/slugify.ts',
 		origin: 'extensions/markdown-language-features/src/slugify.ts',
-		bytes: 11010,
-		sha256: '6642bd6ec3204917e2f5896e366d41d570abef8e87da2dc4c7f20447edb9b109',
+		bytes: 10719,
+		sha256: 'ed95c6042911bc18463e1ceacce53abf3c252328dacaaa73c847f9cb0d752912',
+	},
+	{
+		path: 'src/renderer/markdown-language-features/util/dom.ts',
+		origin: 'extensions/markdown-language-features/src/util/dom.ts',
+		bytes: 762,
+		sha256: '500798e4e19fe1184de8fcb16ef4b9274a121a2e7d1a71e6c0c17068ce1a36a2',
+	},
+	{
+		path: 'src/renderer/mermaid/vsCodeTheme.ts',
+		origin: 'extensions/mermaid-markdown-features/preview-src/shared/vsCodeTheme.ts',
+		bytes: 9523,
+		sha256: 'ced57079d15522367bf8ddb45c2a1c59ddd777c6b9ba9c501b6ffce823441989',
+	},
+	{
+		path: 'src/renderer/mermaid/config.ts',
+		origin: 'extensions/mermaid-markdown-features/preview-src/shared/config.ts',
+		bytes: 832,
+		sha256: '46c436ad7731e91efbc3eb8e073e5201bd41f301edf3e543cf6614f9956d4fd4',
+	},
+	{
+		path: 'src/renderer/mermaid/disposable.ts',
+		origin: 'extensions/mermaid-markdown-features/preview-src/shared/disposable.ts',
+		bytes: 403,
+		sha256: '056d2662ea1c89d39041f9d56d52f7a573738d0a27ca9dde2e5b72aecef21bd8',
 	},
 ];
 

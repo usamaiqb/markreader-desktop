@@ -150,6 +150,15 @@
 		check('broken diagram degrades to error state', mermaid.failed === 1, JSON.stringify(mermaid));
 		check('no stray mermaid error graphics leaked into body', mermaid.strayErrorSvgs === 0);
 
+		// mermaid/vsCodeTheme.ts fills nodes with `--vscode-editorWidget-background`, as VS Code does:
+		// #202020 in Dark Modern, #f8f8f8 in Light Modern. mermaid's stock themes use neither.
+		const nodeFill = () => {
+			const rect = document.querySelector('.mermaid-block.rendered > svg .node rect');
+			return rect ? getComputedStyle(rect).fill : 'no node rect';
+		};
+		const expectedFill = document.body.classList.contains('vscode-dark') ? 'rgb(32, 32, 32)' : 'rgb(248, 248, 248)';
+		check('diagrams use the VS Code mermaid theme', nodeFill() === expectedFill, nodeFill());
+
 		log('');
 		log('--- outline navigation ---');
 		const scrollBeforeNav = window.scrollY;
@@ -260,6 +269,9 @@
 		// Mermaid re-renders on theme change; let it settle before moving on.
 		await waitFor('mermaid redraw in light theme', () =>
 			document.querySelectorAll('.mermaid-block.rendered > svg').length === 2, 45000);
+		const lightFill = await waitFor('diagram colors to follow the theme', () => nodeFill() === 'rgb(248, 248, 248)')
+			.then(() => nodeFill(), () => nodeFill());
+		check('diagram colors follow a theme switch', lightFill === 'rgb(248, 248, 248)', lightFill);
 
 		log('');
 		log('--- panes ---');

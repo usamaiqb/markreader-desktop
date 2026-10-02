@@ -22,8 +22,8 @@ import {
 } from './config';
 import type { DocumentView, HeadingInfo } from './document';
 import { capabilitiesOf, type MarkReaderApi, type TreeEntry } from './host';
+import { escapeHtml } from './markdown-language-features/util/dom';
 import { basename, dirname, samePath } from './paths';
-import { escapeHtml } from './util';
 
 export interface ShellOptions {
 	readonly view: DocumentView;

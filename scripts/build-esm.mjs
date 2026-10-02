@@ -66,21 +66,28 @@ const VENDOR = [
 ];
 
 /**
- * Bare specifier -> vendored file, plus the one relative specifier that is also vendored.
- * Anything imported by our code and not named here fails the build, rather than shipping an
- * import the browser cannot resolve.
+ * Bare specifier -> vendored file, as a path from the output root. Anything imported by our
+ * code and not named here fails the build, rather than shipping an import the browser cannot
+ * resolve.
  */
 const SPECIFIERS = new Map([
-	['markdown-it', './vendor/markdown-it.js'],
-	['@vscode/markdown-it-katex', './vendor/markdown-it-katex.js'],
-	['yaml', './vendor/yaml.js'],
-	['dompurify', './vendor/purify.js'],
-	['mermaid', './vendor/mermaid.js'],
-	['./highlight', './vendor/highlight.js'],
+	['markdown-it', 'vendor/markdown-it.js'],
+	['@vscode/markdown-it-katex', 'vendor/markdown-it-katex.js'],
+	['yaml', 'vendor/yaml.js'],
+	['dompurify', 'vendor/purify.js'],
+	['mermaid', 'vendor/mermaid.js'],
 ]);
 
-/** Matches the specifier of a static import/export or a dynamic `import()`. */
-const SPECIFIER_PATTERN = /(\bfrom\s*|\bimport\s*\(\s*)(['"])([^'"]+)\2/g;
+/**
+ * The one module of ours that is also vendored, keyed by the module a relative specifier
+ * resolves to rather than by how it is spelled: `./highlight` names it only from the root.
+ */
+const VENDORED_MODULES = new Map([
+	['highlight', 'vendor/highlight.js'],
+]);
+
+/** Matches the specifier of a static import/export, a side-effect `import 'x'`, or a dynamic `import()`. */
+const SPECIFIER_PATTERN = /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"]+)\2/g;
 
 /**
  * Emitted by `tsc` but replaced by a vendored build, so the emitted copy is dead code.
@@ -143,23 +150,52 @@ async function buildVendor() {
 }
 
 /**
+ * Every module of ours in the output, at any depth: the files copied verbatim from VS Code
+ * keep upstream's folder layout. `vendor/` is the libraries, not our code.
+ */
+async function ourModules(dir = out) {
+	const found = [];
+	for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+		const full = path.join(dir, entry.name);
+		if (entry.isDirectory()) {
+			if (full !== path.join(out, 'vendor')) {
+				found.push(...await ourModules(full));
+			}
+		} else if (entry.name.endsWith('.js')) {
+			found.push(full);
+		}
+	}
+	return found;
+}
+
+/** `target`, a path from the output root, as a specifier written in a file in `dir`. */
+function specifierFrom(dir, target) {
+	const relative = path.relative(dir, path.join(out, target)).split(path.sep).join('/');
+	return relative.startsWith('.') ? relative : `./${relative}`;
+}
+
+/**
  * Rewrites every specifier in the emitted JS. Two jobs: `tsc` emits `./engine` where a browser
  * needs `./engine.js`, and bare specifiers have to become vendored paths.
  */
 async function rewriteSpecifiers() {
-	const files = (await fs.readdir(out)).filter(name => name.endsWith('.js'));
 	const unknown = new Set();
 
-	for (const name of files) {
-		const file = path.join(out, name);
+	for (const file of await ourModules()) {
+		const dir = path.dirname(file);
 		const source = await fs.readFile(file, 'utf8');
 
 		const rewritten = source.replace(SPECIFIER_PATTERN, (match, lead, quote, specifier) => {
 			const vendored = SPECIFIERS.get(specifier);
 			if (vendored) {
-				return `${lead}${quote}${vendored}${quote}`;
+				return `${lead}${quote}${specifierFrom(dir, vendored)}${quote}`;
 			}
 			if (specifier.startsWith('.')) {
+				const module = path.relative(out, path.resolve(dir, specifier)).split(path.sep).join('/');
+				const vendoredModule = VENDORED_MODULES.get(module);
+				if (vendoredModule) {
+					return `${lead}${quote}${specifierFrom(dir, vendoredModule)}${quote}`;
+				}
 				// Our own module. `tsc` never adds the extension; browsers require it.
 				return specifier.endsWith('.js')
 					? match
@@ -210,14 +246,15 @@ async function copyStylesheets() {
 
 async function copyStubHost() {
 	await fs.copyFile(path.join(root, 'test/stub-host.html'), path.join(out, 'stub.html'));
+	await fs.copyFile(path.join(root, 'test/stub-host.js'), path.join(out, 'stub.js'));
 	await fs.cp(path.join(root, 'samples'), path.join(out, 'samples'), { recursive: true });
 }
 
 async function report() {
-	const ourCode = (await fs.readdir(out)).filter(n => n.endsWith('.js'));
+	const ourCode = await ourModules();
 	let ourBytes = 0;
-	for (const name of ourCode) {
-		ourBytes += (await fs.stat(path.join(out, name))).size;
+	for (const file of ourCode) {
+		ourBytes += (await fs.stat(file)).size;
 	}
 	console.log(`  our code   ${ourCode.length} modules, ${(ourBytes / 1024).toFixed(0)}kb`);
 	for (const { file } of VENDOR) {

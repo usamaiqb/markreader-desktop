@@ -6,10 +6,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, it } from 'vitest';
+import { escapeAttribute, escapeHtml } from '../../src/renderer/markdown-language-features/util/dom';
 import {
 	asLocalResourceUri,
-	escapeAttribute,
-	escapeHtml,
 	isAbsolutePath,
 	localResourceUriToPath,
 } from '../../src/renderer/util';

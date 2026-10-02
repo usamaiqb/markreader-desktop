@@ -18,7 +18,10 @@
 	Open `out/renderer-esm/stub.html` after `npm run build:esm`. It needs a server rather than
 	`file://`, because ES modules are fetched under CORS:
 
-		npx http-server out/renderer-esm     # then open /stub.html
+		npm run serve:esm     # then open http://localhost:8099/stub.html
+
+	`?doc=rtl.md` picks another file from `samples/`, and `?theme=light` the light theme. The
+	script is `stub-host.js`, copied alongside as `stub.js`: inline, the CSP below would block it.
 -->
 <html lang="en">
 
@@ -41,68 +44,7 @@
 <body class="vscode-dark wordWrap">
 	<div class="markdown-body" dir="auto" id="markdown-body"></div>
 
-	<script type="module">
-		import { DocumentView } from './document.js';
-		import { setResourceOrigin } from './util.js';
-		import { setConfig } from './config.js';
-
-		// Document resources are same-origin here, as they are on Android — so the origin is
-		// the page's own and `readFile` is an ordinary fetch rather than a second bridge.
-		setResourceOrigin(location.origin);
-
-		const SAMPLE = new URLSearchParams(location.search).get('doc') ?? 'kitchen-sink.md';
-
-		/**
-		 * The fake host. Everything the document module is allowed to assume about the app
-		 * around it, and nothing else — no capabilities, so this also exercises the degrade
-		 * paths a WebView host will take.
-		 */
-		const host = {
-			capabilities: { revealInFolder: false, windowBackground: false, watchesFiles: false },
-
-			async readFile(filePath) {
-				const response = await fetch(filePath);
-				if (!response.ok) {
-					return undefined;
-				}
-				return { path: filePath, text: await response.text() };
-			},
-
-			async openPath(filePath) {
-				const doc = await this.readFile(filePath);
-				if (doc) {
-					view.setDocument(doc, { preserveScroll: false });
-				}
-			},
-
-			async openExternal(url) {
-				console.log('[stub] openExternal', url);
-			},
-		};
-
-		const view = new DocumentView({
-			root: document.getElementById('markdown-body'),
-			host,
-		});
-
-		// Whatever a real host would draw its chrome from, printed instead. A shell subscribes
-		// to exactly these; this proves they fire without one.
-		view.on('headings', headings => console.log(`[stub] ${headings.length} headings`));
-		view.on('activeHeading', slug => console.log('[stub] active heading', slug));
-		view.on('find', state => console.log('[stub] find', state));
-		view.on('theme', state => console.log('[stub] theme', state));
-		view.on('document', doc => console.log('[stub] document', doc?.path));
-
-		setConfig({ theme: 'dark' });
-		view.applyTheme();
-		view.setWordWrap(true);
-
-		const documentPath = `${location.pathname.replace(/\/[^/]*$/, '')}/samples/${SAMPLE}`;
-		await host.openPath(documentPath);
-
-		// Read by the automated check, which waits for it rather than guessing at timing.
-		window.__STUB_READY__ = true;
-	</script>
+	<script type="module" src="./stub.js"></script>
 </body>
 
 </html>

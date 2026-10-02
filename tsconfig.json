@@ -17,7 +17,11 @@
 		"resolveJsonModule": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": false,
-		"noEmit": true
+		"noEmit": true,
+		// The files copied verbatim from VS Code import `vscode`; see src/renderer/vscode.ts.
+		"paths": {
+			"vscode": ["./src/renderer/vscode.ts"]
+		}
 	},
 	"include": ["src/**/*.ts", "types/**/*.d.ts", "build.mjs", "test/unit/**/*.ts"]
 }

@@ -24,6 +24,8 @@ import { getConfig } from './config';
 import { MarkdownItEngine, type HeadingInfo } from './engine';
 import { capabilitiesOf, type DocumentHost, type MarkDocument } from './host';
 import { ensureMath, prepareForDocument } from './lazy';
+import type { MermaidExtensionConfig } from './mermaid/config';
+import { VsCodeMermaidThemeTracker, vsCodeMermaidTheme } from './mermaid/vsCodeTheme';
 import { isMarkdownPath, samePath } from './paths';
 import { getPlugins } from './plugins';
 import { setDocumentHtml } from './sanitizer';
@@ -76,6 +78,15 @@ const REVEAL_OFFSET = 56;
 
 const NO_MATCHES: FindState = { query: '', index: -1, total: 0 };
 
+/**
+ * VS Code's diagram theme for both light and dark, its default. `resolveMermaidTheme` reads
+ * only these two fields; the rest of the type configures diagram controls this app lacks.
+ */
+const MERMAID_THEME_CONFIG = {
+	darkModeTheme: vsCodeMermaidTheme,
+	lightModeTheme: vsCodeMermaidTheme,
+} as MermaidExtensionConfig;
+
 export class DocumentView {
 	private readonly root: HTMLElement;
 	private readonly host: DocumentHost;
@@ -85,7 +96,8 @@ export class DocumentView {
 	 * piece of DOM outside the root that the document owns, and it is not a choice:
 	 * `markdown.css` selects `body.wordWrap pre`, and `highlight.css` selects
 	 * `.vscode-light .hljs-*`. The stylesheets are copied verbatim from VS Code, so the
-	 * classes go where they expect them.
+	 * classes go where they expect them. The theme classes are mirrored onto `<html>`; see
+	 * `applyTheme()`.
 	 */
 	private readonly themeRoot: HTMLElement;
 
@@ -109,6 +121,7 @@ export class DocumentView {
 
 	private mermaidPromise: Promise<MermaidApi> | undefined;
 	private mermaidRenderSeq = 0;
+	private readonly mermaidTheme = new VsCodeMermaidThemeTracker();
 
 	/** Guards the await in `setDocumentAsync` against a second document overtaking the first. */
 	private documentSeq = 0;
@@ -282,31 +295,46 @@ export class DocumentView {
 	 * copying fenced code. The button markup relies on `.code-block-copy-button` from
 	 * the copied markdown.css.
 	 */
+	/**
+	 * Upstream's `addCodeBlockCopyButtons`, scoped to the root. `pre > code` also leaves out the
+	 * mermaid fallback, which is a bare `<pre>`.
+	 */
 	private addCodeBlockCopyButtons(): void {
-		for (const pre of this.root.querySelectorAll('pre')) {
-			if (pre.classList.contains('mermaid-fallback') || pre.querySelector('.code-block-copy-button')) {
-				continue;
+		for (const code of this.root.querySelectorAll('pre > code')) {
+			const pre = code.parentElement!;
+
+			// Inject copy button if not already present
+			if (!pre.querySelector('.code-block-copy-button')) {
+				const button = document.createElement('button');
+				button.className = 'code-block-copy-button';
+				button.setAttribute('aria-label', 'Copy code block');
+				button.appendChild(createCopyIcon());
+				button.addEventListener('click', async (e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					const text = code.textContent ?? '';
+					try {
+						await navigator.clipboard.writeText(text);
+						button.replaceChildren(createCheckIcon());
+						button.classList.add('copied');
+						setTimeout(() => {
+							button.replaceChildren(createCopyIcon());
+							button.classList.remove('copied');
+						}, 2000);
+					} catch {
+						const selection = window.getSelection();
+						if (selection) {
+							selection.removeAllRanges();
+							const range = document.createRange();
+							range.selectNodeContents(code);
+							selection.addRange(range);
+							document.execCommand('copy');
+							selection.removeAllRanges();
+						}
+					}
+				});
+				pre.appendChild(button);
 			}
-			const button = document.createElement('button');
-			button.className = 'code-block-copy-button';
-			button.title = 'Copy';
-			button.setAttribute('aria-label', 'Copy code block');
-			button.innerHTML = `<svg class="mr-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 3.5H3.5a1 1 0 0 0-1 1v7"/></svg>`;
-			button.addEventListener('click', async () => {
-				const code = pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
-				try {
-					await navigator.clipboard.writeText(code);
-					button.classList.add('copied');
-					button.title = 'Copied';
-					setTimeout(() => {
-						button.classList.remove('copied');
-						button.title = 'Copy';
-					}, 1400);
-				} catch {
-					// Clipboard can reject if the window isn't focused; nothing useful to do.
-				}
-			});
-			pre.appendChild(button);
 		}
 	}
 
@@ -361,11 +389,13 @@ export class DocumentView {
 			return;
 		}
 
+		// As upstream's preview does: re-resolve the colors before every render, since this
+		// runs again on each theme switch.
+		this.mermaidTheme.refresh();
 		mermaid.initialize({
 			startOnLoad: false,
-			theme: this.themeRoot.classList.contains('vscode-dark') ? 'dark' : 'default',
+			...this.mermaidTheme.resolveMermaidTheme(MERMAID_THEME_CONFIG),
 			securityLevel: 'strict',
-			fontFamily: getComputedStyle(this.themeRoot).fontFamily,
 		});
 
 		// Guards against a second render (theme switch, live reload) interleaving with this one.
@@ -468,8 +498,12 @@ export class DocumentView {
 		const mode = getConfig().theme;
 		const dark = mode === 'dark' || (mode === 'system' && this.systemDark.matches);
 
-		this.themeRoot.classList.toggle('vscode-dark', dark);
-		this.themeRoot.classList.toggle('vscode-light', !dark);
+		// On `<html>` too: theme.css defines the `--vscode-*` properties there, where VS Code
+		// puts them and mermaid/vsCodeTheme.ts reads them, without needing `:has()`.
+		for (const element of [this.themeRoot, this.themeRoot.ownerDocument.documentElement]) {
+			element.classList.toggle('vscode-dark', dark);
+			element.classList.toggle('vscode-light', !dark);
+		}
 
 		const background = rgbToHex(getComputedStyle(this.themeRoot).backgroundColor);
 		this.emit('theme', { dark, background });
@@ -646,6 +680,42 @@ type MermaidApi = {
 	initialize(config: Record<string, unknown>): void;
 	render(id: string, text: string): Promise<{ svg: string }>;
 };
+
+function createCopyIcon(): SVGElement {
+	const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+	svg.setAttribute('aria-hidden', 'true');
+	svg.setAttribute('focusable', 'false');
+	svg.setAttribute('width', '16');
+	svg.setAttribute('height', '16');
+	svg.setAttribute('viewBox', '0 0 16 16');
+	svg.setAttribute('fill', 'none');
+	const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+	path1.setAttribute('d', 'M4 4H2V14H11V12H4V4Z');
+	path1.setAttribute('fill', 'currentColor');
+	const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+	path2.setAttribute('fill-rule', 'evenodd');
+	path2.setAttribute('clip-rule', 'evenodd');
+	path2.setAttribute('d', 'M5 2H14V11H5V2ZM6 3H13V10H6V3Z');
+	path2.setAttribute('fill', 'currentColor');
+	svg.appendChild(path1);
+	svg.appendChild(path2);
+	return svg;
+}
+
+function createCheckIcon(): SVGElement {
+	const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+	svg.setAttribute('aria-hidden', 'true');
+	svg.setAttribute('focusable', 'false');
+	svg.setAttribute('width', '16');
+	svg.setAttribute('height', '16');
+	svg.setAttribute('viewBox', '0 0 16 16');
+	svg.setAttribute('fill', 'none');
+	const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+	path.setAttribute('d', 'M6.27 10.87L3.63 8.23L2.56 9.3L6.27 13.01L14.07 5.21L13 4.14L6.27 10.87Z');
+	path.setAttribute('fill', 'currentColor');
+	svg.appendChild(path);
+	return svg;
+}
 
 function rgbToHex(color: string): string | undefined {
 	const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(color);

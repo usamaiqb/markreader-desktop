@@ -3,5 +3,17 @@
 	"categories": {
 		"correctness": "error"
 	},
-	"ignorePatterns": ["out/**", "dist/**", "test/tmp/**", "node_modules/**"]
+	"ignorePatterns": ["out/**", "dist/**", "test/tmp/**", "node_modules/**"],
+	"overrides": [
+		{
+			// Verbatim from VS Code, so suppressed here rather than in the file. Upstream's own
+			// disable comment names only no-misleading-character-class; the control characters
+			// and escapes are github-slugger's regex as written.
+			"files": ["src/renderer/slugify.ts"],
+			"rules": {
+				"no-control-regex": "off",
+				"no-useless-escape": "off"
+			}
+		}
+	]
 }

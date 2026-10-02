@@ -20,6 +20,22 @@ updates:
     commit-message:
       prefix: build
     open-pull-requests-limit: 3
+    # The rendering libraries follow VS Code's markdown extensions, not npm's latest: rendering
+    # like VS Code is the point of the app. Bumps within VS Code's major still arrive below;
+    # crossing it waits until VS Code does, and is then done by hand. Check its ranges in
+    # extensions/markdown-language-features/package.json and extensions/markdown-math. Each of
+    # these three was once taken past VS Code by a routine bump. mermaid has a second reason:
+    # 12 bundles elkjs, EPL-2.0, which a GPL-3.0 app cannot ship (licenses/NOTICE.md).
+    # katex is 0.x, where the breaking bump is the minor one, so it is capped by range.
+    ignore:
+      - dependency-name: mermaid
+        versions: [">=12"]
+      - dependency-name: markdown-it
+        versions: [">=15"]
+      - dependency-name: "@types/markdown-it"
+        versions: [">=15"]
+      - dependency-name: katex
+        versions: [">=0.17"]
     groups:
       # Bundled into the app by esbuild, so these are the ones that reach a user. Worth
       # reading a changelog before merging.

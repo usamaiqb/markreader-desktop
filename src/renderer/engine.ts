@@ -19,7 +19,7 @@
 //   - collects a heading outline into the render env, for the table of contents
 //   - intercepts ```mermaid fences into placeholder divs the renderer hydrates
 
-import MarkdownItFactory, { type Env, type MarkdownIt, type MarkdownItOptions, type Token } from 'markdown-it';
+import MarkdownItFactory, { type MarkdownIt, type MarkdownItOptions, type Token } from 'markdown-it';
 import type { PluginSimple } from './plugins';
 import { getHighlighter } from './lazy';
 import { githubSlugifier, type ISlugifier, type SlugBuilder } from './slugify';
@@ -64,9 +64,9 @@ const pluginSourceMap: PluginSimple = (md): void => {
 	});
 
 	// The 'html_block' renderer doesn't respect `attrs`. We need to insert a marker.
-	const originalHtmlBlockRenderer = md.renderer.rules['html_block'];
+	const originalHtmlBlockRenderer = md.renderer.rules.html_block;
 	if (originalHtmlBlockRenderer) {
-		md.renderer.rules['html_block'] = (tokens, idx, options, env, self) => (
+		md.renderer.rules.html_block = (tokens, idx, options, env, self) => (
 			`<div ${self.renderAttrs(tokens[idx])} ></div>\n` +
 			originalHtmlBlockRenderer(tokens, idx, options, env, self)
 		);
@@ -94,7 +94,12 @@ export interface RenderContext {
 	readonly rootPath?: string;
 }
 
-/** Extends markdown-it's own `Env`, which is the open bag of state it threads through a render. */
+/**
+ * The open bag of state markdown-it threads through a render. `@types/markdown-it` types it as
+ * `any`, so it is spelled out here.
+ */
+type Env = Record<string, unknown>;
+
 interface RenderEnv extends RenderContext, Env {
 	readonly containingImages: Set<string>;
 	readonly headings: HeadingInfo[];
@@ -189,7 +194,7 @@ export class MarkdownItEngine {
 		md.renderer.rules.image = (tokens: Token[], idx: number, options, env, self) => {
 			const token = tokens[idx];
 			const renderEnv = renderEnvOf(env);
-			// markdown-it 15 widened `attrGet` to `string | number | null`.
+			// `String()` because markdown-it 15's own typings widen `attrGet` to `string | number | null`.
 			const src = token.attrGet('src');
 			if (src) {
 				const value = String(src);
@@ -210,8 +215,8 @@ export class MarkdownItEngine {
 	}
 
 	#addFencedRenderer(md: MarkdownIt): void {
-		const original = md.renderer.rules['fenced'];
-		md.renderer.rules['fenced'] = (tokens: Token[], idx: number, options, env, self) => {
+		const original = md.renderer.rules.fenced;
+		md.renderer.rules.fenced = (tokens: Token[], idx: number, options, env, self) => {
 			const token = tokens[idx];
 			if (token.map?.length) {
 				token.attrJoin('class', 'hljs');

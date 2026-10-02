@@ -35,13 +35,16 @@ src/
     highlight.ts         highlight.js core + the explicit list of languages that ship
     host.ts              the host contract, and the path space contract with it
     document.ts          DocumentView: links, find, outline, theming, mermaid — shareable
+    mermaid/             ← mermaid-markdown-features vsCodeTheme.ts and its two imports, verbatim
     shell.ts             desktop chrome: file list, outline pane, find bar, menus
     renderer.ts          composition root: introduces the two
     sanitizer.ts         the only place document HTML enters the DOM
     lazy.ts              what a document needs (KaTeX, highlight.js) and loading only that
     config.ts            replaces MarkdownPreviewConfiguration
     paths.ts             browser-safe path helpers
-    util.ts              escaping + mdr:// URI helpers
+    util.ts              mdr:// URI helpers
+    markdown-language-features/util/dom.ts  ← dom.ts, verbatim: the escaping helpers
+    vscode.ts            the `vscode` module, as far as the verbatim files use it
     index.html           replaces MdDocumentRenderer.renderDocument()
     css/
       markdown.css       ← VS Code, verbatim
@@ -227,7 +230,7 @@ out/renderer-esm/
   document.js  engine.js  shell.js  …   13 modules, 92kb, unminified, 1:1 with the source
   vendor/                               6 libraries, minified, self-contained
   css/                                  the document stylesheets, plus katex.css
-  stub.html  samples/                   the stub host and something for it to render
+  stub.html  stub.js  samples/          the stub host and something for it to render
 ```
 
 `scripts/build-esm.mjs` does three things: `tsc` emits our code one file in, one file out; each

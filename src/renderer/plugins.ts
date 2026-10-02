@@ -19,8 +19,8 @@ import type { MarkdownIt } from 'markdown-it';
 import { getConfig } from './config';
 
 /**
- * markdown-it 15 ships its own typings and no longer exports the two plugin aliases
- * `@types/markdown-it` used to provide. They were only ever these two shapes.
+ * Declared here rather than imported from `@types/markdown-it`: markdown-it 15 ships its own
+ * typings without these two aliases, and they were only ever these two shapes.
  */
 export type PluginSimple = (md: MarkdownIt) => void;
 export type PluginWithOptions<T = unknown> = (md: MarkdownIt, options?: T) => void;

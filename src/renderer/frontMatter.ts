@@ -15,7 +15,7 @@
 
 import type { MarkdownIt, MarkdownItOptions, StateBlock, Token } from 'markdown-it';
 import * as yaml from 'yaml';
-import { escapeHtml } from './util';
+import { escapeHtml } from './markdown-language-features/util/dom';
 import { getConfig, type FrontMatterRenderStyle } from './config';
 
 const FRONT_MATTER_TOKEN = 'front_matter';
@@ -23,7 +23,7 @@ const MARKER = '---';
 
 interface IFrontMatterMeta {
 	readonly content: string;
-	/** markdown-it 15 types `Token.meta` as an open record; this has to be assignable to one. */
+	/** markdown-it 15's own typings make `Token.meta` an open record; this stays assignable to one. */
 	[key: string]: unknown;
 }
 
