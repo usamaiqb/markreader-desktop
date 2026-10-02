@@ -1,25 +1,84 @@
+# One PR per dependency is Dependabot's default, and with three ecosystems all on a weekly
+# schedule that default produced 31 bump PRs in six weeks — nine of them on one day. The
+# `groups` key is the fix: every update matching a group collapses into a single PR.
+#
+# A dependency joins the first group whose patterns and update-types both match, so order
+# matters below. Majors are grouped rather than ignored: a breaking bump stays visible, but
+# never rides along with routine patches. mermaid 11 -> 12 is why — it arrived inside a weekly
+# batch, broke `npm run verify:esm`, and pulled in five high advisories.
+#
+# Monthly is safe because security fixes do not wait for this schedule. Dependabot security
+# updates are driven by alerts and open their own PRs as soon as an advisory lands, provided
+# "Dependabot alerts" and "Dependabot security updates" are enabled in repository settings.
 version: 2
 updates:
-  # Keep pinned GitHub Actions up to date (and lets you safely move to SHA pins).
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: ci
-
-  # Keep the frontend toolchain and Tauri CLI in sync.
+  # Keep the frontend toolchain and the libraries the bundle ships.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     commit-message:
       prefix: build
+    open-pull-requests-limit: 3
+    groups:
+      # Bundled into the app by esbuild, so these are the ones that reach a user. Worth
+      # reading a changelog before merging.
+      renderer:
+        patterns:
+          - dompurify
+          - markdown-it
+          - "@vscode/markdown-it-katex"
+          - katex
+          - highlight.js
+          - mermaid
+          - yaml
+        update-types:
+          - minor
+          - patch
+      # Build, test and packaging tooling. Never reaches a user.
+      toolchain:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      # One PR, left open until there is time to do it properly.
+      majors:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   # Keep the Rust crates (including Tauri) current.
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
-      interval: weekly
+      interval: monthly
     commit-message:
       prefix: build
+    open-pull-requests-limit: 2
+    groups:
+      cargo:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      cargo-majors:
+        patterns:
+          - "*"
+        update-types:
+          - major
+
+  # Keep the SHA-pinned GitHub Actions up to date.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - "*"
