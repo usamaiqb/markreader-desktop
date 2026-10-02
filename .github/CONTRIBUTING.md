@@ -30,7 +30,7 @@ npm start              # build the frontend, then launch the app (tauri dev)
 | `test/` | The smoke test suite and its harness |
 | `scripts/` | Version-check script |
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
+See [ARCHITECTURE.md](../docs/ARCHITECTURE.md) for details.
 
 ## Development workflow
 
@@ -38,7 +38,7 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 - **Backend** — lives in `src-tauri/`; `npm start` rebuilds and runs it.
 - **Open a document in a dev run** — pass an absolute path to the binary directly, since a
   relative path through `tauri dev` doesn't resolve (see
-  [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)):
+  [KNOWN_ISSUES.md](../docs/KNOWN_ISSUES.md)):
 
   ```bash
   cd src-tauri && cargo run -- C:\docs\spec.md

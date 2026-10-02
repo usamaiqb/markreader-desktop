@@ -59,7 +59,7 @@ A second launch doesn't start a second app — it hands the file to the running 
 
 ## Building from source
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full developer guide.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full developer guide.
 
 ```bash
 npm install
@@ -71,12 +71,12 @@ Requires the Rust toolchain, and on Windows the MSVC build tools and WebView2 ru
 
 ## Project documentation
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, build, test, release process
+- [CONTRIBUTING.md](.github/CONTRIBUTING.md) — setup, build, test, release process
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the app is put together
 - [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) — platform-specific quirks and workarounds
 - [CHANGELOG.md](CHANGELOG.md) — release history
-- [SECURITY.md](SECURITY.md) — how to report a vulnerability
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — the standards expected of everyone taking part
+- [SECURITY.md](.github/SECURITY.md) — how to report a vulnerability
+- [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) — the standards expected of everyone taking part
 
 ## License
 

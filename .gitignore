@@ -10,3 +10,6 @@ src-tauri/gen/
 src-tauri/.cargo/
 test/tmp/
 local/
+
+# IDE workspace state
+.idea/
