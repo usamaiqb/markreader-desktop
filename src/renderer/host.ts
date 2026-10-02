@@ -4,9 +4,9 @@
 /*---------------------------------------------------------------------------------------------
  *  The host contract — the only thing `src/renderer/**` may assume about the app around it.
  *
- *  Two hosts implement this: the Tauri bridge in `src/bridge/bridge.ts`, and (from D2) an
- *  Android WebView. `DocumentHost` is the narrow half the shareable document module sees;
- *  `MarkReaderApi` adds the parts only a desktop shell uses.
+ *  Two hosts implement this: the Tauri bridge in `src/bridge/bridge.ts`, which ships today,
+ *  and a prospective Android WebView. `DocumentHost` is the narrow half the shareable
+ *  document module sees; `MarkReaderApi` adds the parts only a desktop shell uses.
  *
  *  ## The path space contract
  *

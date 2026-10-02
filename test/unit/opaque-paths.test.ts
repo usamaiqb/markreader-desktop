@@ -9,8 +9,8 @@
  *  The renderer has to behave identically in all three, because it is not supposed to know
  *  which one it is looking at.
  *
- *  If one of these spaces ever needs a special case to pass, the contract is broken and D2's
- *  host has lost the seam the spike found. That is the whole point of the file — it is a
+ *  If one of these spaces ever needs a special case to pass, the contract is broken and a
+ *  non-desktop host has lost its seam. That is the whole point of the file — it is a
  *  regression test for an architectural property, not for a function.
  *--------------------------------------------------------------------------------------------*/
 
@@ -50,7 +50,8 @@ const SPACES: readonly PathSpace[] = [
 		root: 'C:/docs',
 	},
 	{
-		// What D2 will actually pass: `<token>` names one picked SAF tree and means nothing here.
+		// What an Android host would pass: `<token>` names one picked SAF tree and
+		// means nothing here.
 		name: 'android saf virtual',
 		doc: '/saf/tree-7/docs/file.md',
 		dir: '/saf/tree-7/docs',

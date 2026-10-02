@@ -161,8 +161,8 @@ th {
 }
 
 /*
- * Mobile: a diagram scaled to fit a phone is unreadable — the spike measured exactly this at
- * 1080px. Below that width let it keep its natural size and scroll inside the block, which
+ * Mobile: a diagram scaled to fit a phone is unreadable — measured on a 1080px-wide diagram.
+ * Below that width let it keep its natural size and scroll inside the block, which
  * `.mermaid-block` is already set up for.
  */
 @media (max-width: 600px) {

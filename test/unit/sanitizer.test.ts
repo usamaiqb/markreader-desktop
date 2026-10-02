@@ -20,7 +20,7 @@ import { sanitizeDocumentHtml } from '../../src/renderer/sanitizer';
 
 describe('what the sanitizer removes', () => {
 	it('strips an inline event handler', () => {
-		// D1 exit criterion 4, in its cheapest form.
+		// The sanitizer's core promise, in its cheapest form.
 		const html = sanitizeDocumentHtml('<img src="x" onerror="alert(1)">');
 		expect(html).not.toContain('onerror');
 		expect(html).not.toContain('alert');

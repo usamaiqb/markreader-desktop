@@ -56,7 +56,8 @@ src/
 `renderer/` is split so that a second host can load only part of it. `document.ts` owns
 everything inside the reading surface and touches no DOM outside its root; `shell.ts` owns the
 chrome and never reaches into the document. They meet through five events and the
-`DocumentHost` interface. An Android WebView will load the first and supply its own second.
+`DocumentHost` interface, so a second host can take the first and supply its own second. A
+prospective Android app is the candidate for that; nothing here depends on it yet.
 
 Paths crossing that interface are **opaque to the renderer** — it does string maths on them
 and hands the result back, so a host is free to make a path mean whatever it likes. The
@@ -215,10 +216,11 @@ with (`set_window_background`), so resizing never flashes white behind the page.
 
 ## The unbundled build
 
-`npm run build` produces the bundle Tauri ships. `npm run build:esm` produces the artifact an
-Android WebView will load: **our code as plain ES modules, libraries as vendored single files.**
-The point of having both is that they are the same source — "works bundled, breaks unbundled"
-is a whole class of bug, and it is one we would otherwise meet on a device.
+`npm run build` produces the bundle Tauri ships. `npm run build:esm` produces the artifact a
+non-Tauri host such as an Android WebView would load: **our code as plain ES modules, libraries
+as vendored single files.** The point of having both is that they are the same source — "works
+bundled, breaks unbundled" is a whole class of bug, and it is one we would otherwise meet on a
+device.
 
 ```
 out/renderer-esm/
@@ -242,16 +244,16 @@ its CommonJS. Two traps worth knowing:
   baked in, which is why that file is 269kb.
 - Flattening mermaid loses its internal lazy loading of diagram types. Acceptable here because
   the whole of mermaid is already behind one dynamic `import()`, but it is why it is 3.4MB
-  rather than the 2.7MB the Android plan budgeted.
+  rather than the 2.7MB budgeted for it.
 
 `npm run verify:esm` checks the result: every import resolves, no bare specifiers survive, no
 throwing shims, and — under jsdom — the modules actually execute and render a document.
 
-`npm run serve:esm` then `http://localhost:8099/stub.html` opens the stub host: the bare page
-from D1's exit criterion 2, with no `app.css` and no `shell.ts`. If the document module renders
-there it will render in a WebView, because that page gives it strictly less than one. It is
-also the regression test for shell coupling — the moment `document.ts` reaches for an element
-only the desktop chrome has, the stub breaks and the app does not.
+`npm run serve:esm` then `http://localhost:8099/stub.html` opens the stub host: a bare page
+with no `app.css` and no `shell.ts`. If the document module renders there it will render in a
+WebView, because that page gives it strictly less than one. It is also the regression test for
+shell coupling — the moment `document.ts` reaches for an element only the desktop chrome has,
+the stub breaks and the app does not.
 
 **A stylesheet can couple the same way, and the stub will not tell you.** A rule for something
 `document.ts` draws, left in `app.css`, renders on desktop and silently does not on a host that
