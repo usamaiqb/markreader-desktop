@@ -17,8 +17,62 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check-version:
-    name: Version files in sync
+  # Decides how much of the pipeline a PR needs. Pushes to main and manual runs always get
+  # everything. A PR skips the build entirely when it only touches docs, and skips packaging
+  # unless it touches something that can change what gets packaged: about two thirds of each
+  # OS job is the release build and the installers, and neither is used from a PR.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      package: ${{ steps.filter.outputs.package }}
+    steps:
+      # A PR checks out its merge commit, so HEAD^1 is the base it would merge into and the
+      # diff against it is exactly what the PR changes.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2
+
+      - name: Classify changed files
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "Not a PR: running everything."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "package=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files=$(git diff --name-only HEAD^1 HEAD)
+          echo "Changed files:"
+          printf '%s\n' "$files" | sed 's/^/  /'
+
+          # Nothing on this list is built, bundled or tested. Anything else counts as code,
+          # including an empty diff, so a mistake here costs a run rather than a check.
+          docs='^(docs/|metadata/screenshots/|[^/]+\.md$|\.github/[^/]+\.md$|\.github/ISSUE_TEMPLATE/|LICENSE$)'
+          # What can change the release binary or the installers beyond what the smoke test
+          # already covers: bundle config, dependencies, the production build, packaged
+          # metadata and icons, and this pipeline itself.
+          packaging='^(src-tauri/(tauri\.conf\.json|Cargo\.(toml|lock)|build\.rs|icons/|capabilities/)|package(-lock)?\.json$|build\.mjs$|build/|metadata/[^/]+\.xml$|\.github/workflows/)'
+
+          code=false
+          if printf '%s\n' "$files" | grep -qvE "$docs"; then code=true; fi
+          package=false
+          if printf '%s\n' "$files" | grep -qE "$packaging"; then package=true; fi
+
+          echo "code=$code package=$package"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+
+  # Checks whose result does not depend on the OS, so they run once rather than per platform.
+  static:
+    name: Static checks
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,9 +88,19 @@ jobs:
       - name: Check version consistency
         run: npm run check:version
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Frontend unit tests
+        run: npm run test:unit
+
   build:
-    name: Test, verify & package
-    needs: check-version
+    name: Test & package
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -51,6 +115,8 @@ jobs:
             bundles: dmg
             artifact: macos
     runs-on: ${{ matrix.os }}
+    env:
+      PACKAGE: ${{ needs.changes.outputs.package }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -64,11 +130,13 @@ jobs:
           # Required when the action is pinned by SHA: it cannot infer the toolchain
           # from the ref the way dtolnay/rust-toolchain@stable does.
           toolchain: stable
-          components: rustfmt, clippy
+          components: clippy
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
+          # PRs restore main's cache but do not save their own, which would only evict it.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
@@ -86,21 +154,14 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Frontend unit tests
-        run: npm run test:unit
-
       # Must precede any cargo step: tauri::generate_context!() validates that
       # frontendDist (../out/renderer) exists at compile time, and plain cargo
       # bypasses the Tauri CLI, so beforeBuildCommand never runs.
       - name: Build frontend
         run: npm run build
 
+      # Clippy and the tests stay per OS: the backend has platform-specific code, and the
+      # smoke suite runs in a different webview on each (WebView2, WKWebView, WebKitGTK).
       - name: Clippy
         working-directory: src-tauri
         run: cargo clippy -- -D warnings
@@ -117,24 +178,26 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a npm test
 
-      - name: Build release binary
-        run: npm run package:dir
+      # One release build: `tauri build` with bundles also leaves the bare binary in
+      # target/release, which is what verify:packaged runs.
+      - name: Bundle installers
+        if: env.PACKAGE == 'true'
+        run: npx tauri build --bundles ${{ matrix.bundles }}
 
       - name: Verify packaged app
-        if: runner.os != 'Linux'
+        if: env.PACKAGE == 'true' && runner.os != 'Linux'
         run: npm run verify:packaged
 
       - name: Verify packaged app (headless)
-        if: runner.os == 'Linux'
+        if: env.PACKAGE == 'true' && runner.os == 'Linux'
         run: xvfb-run -a npm run verify:packaged
 
-      - name: Bundle installers
-        run: npx tauri build --bundles ${{ matrix.bundles }}
-
       - name: Upload artifacts
+        if: env.PACKAGE == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: markreader-${{ matrix.artifact }}
+          retention-days: 7
           path: |
             src-tauri/target/release/markreader
             src-tauri/target/release/markreader.exe
@@ -142,21 +205,30 @@ jobs:
 
   # The one check the main-branch ruleset requires. A matrix reports a check per OS, and a
   # job skipped because its dependency failed counts as passing, so this gate runs
-  # regardless and fails unless every job above succeeded.
+  # regardless. Change detection must succeed; after that a skipped job is one it chose to
+  # skip, and anything other than success or skipped fails the gate.
   gate:
     name: Test, lint & build
-    needs: [ check-version, build ]
+    needs: [ changes, static, build ]
     if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: All jobs succeeded
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          CHANGES: ${{ needs.changes.result }}
+          RESULTS: ${{ needs.static.result }} ${{ needs.build.result }}
         run: |
-          echo "Job results: $RESULTS"
+          echo "Change detection: $CHANGES; job results: $RESULTS"
+          if [ "$CHANGES" != "success" ]; then
+            echo "::error::Change detection did not succeed ($CHANGES)."
+            exit 1
+          fi
           for result in $RESULTS; do
-            if [ "$result" != "success" ]; then
-              echo "::error::A required job did not succeed ($result)."
-              exit 1
-            fi
+            case "$result" in
+              success|skipped) ;;
+              *)
+                echo "::error::A required job did not succeed ($result)."
+                exit 1
+                ;;
+            esac
           done

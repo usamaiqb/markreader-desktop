@@ -98,12 +98,25 @@ running MarkReader first, and leave the window alone while it runs.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and push to `main`: version-sync check, then a
-build+test+package matrix across Windows, Linux, and macOS. Each OS runs typecheck, lint,
-the frontend unit tests, clippy, `cargo test`, the DOM smoke suite, and — after packaging —
-the packaged-app verification. All actions are SHA-pinned with `permissions: contents: read`.
+`.github/workflows/ci.yml` runs on every PR and push to `main`. The OS-independent checks
+(version sync, typecheck, lint, frontend unit tests) run once on Linux. Alongside them, a
+matrix across Windows, Linux, and macOS runs clippy, `cargo test` and the DOM smoke suite,
+then builds the installers and verifies the packaged app. All actions are SHA-pinned with
+`permissions: contents: read`.
 
-A final `Test, lint & build` job passes only when every job above did. That job and
+A push to `main` always runs all of it. A PR runs only what its changes need, decided by the
+first job, `Detect changes`:
+
+- **Docs only** (`docs/`, top-level `*.md`, `.github/*.md`, screenshots): nothing is built.
+- **Code**: the static checks and the test matrix, without packaging.
+- **Packaging inputs** (`tauri.conf.json`, `Cargo.*`, `build.rs`, icons, capabilities,
+  `package*.json`, `build.mjs`, the metainfo, the workflows): the installers as well.
+
+The patterns live in that job; when adding a file that changes what gets packaged, add it
+there too.
+
+A final `Test, lint & build` job passes only when every job above succeeded or was
+deliberately skipped. That job and
 `Conventional Commit title` are the two checks `main` requires before a PR can merge, so
 renaming either one means updating the branch ruleset too.
 
