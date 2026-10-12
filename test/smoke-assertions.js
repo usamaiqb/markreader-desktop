@@ -163,7 +163,15 @@
 		log('--- outline navigation ---');
 		const scrollBeforeNav = window.scrollY;
 		document.querySelectorAll('#toc-list .toc-entry')[8]?.click();
-		await sleep(700);
+		// The reveal is a smooth scroll, which a GPU-less runner can be slow to even start, so
+		// wait for movement and then for it to come to rest, rather than a fixed delay.
+		await waitFor('outline click to scroll', () => window.scrollY > scrollBeforeNav, 5000).catch(() => {});
+		let lastScroll = -1;
+		await waitFor('scroll to settle', () => {
+			const settled = window.scrollY === lastScroll;
+			lastScroll = window.scrollY;
+			return settled;
+		}, 5000).catch(() => {});
 		const navigated = { before: scrollBeforeNav, after: window.scrollY };
 		check('clicking an outline entry scrolls the document',
 			navigated.after > navigated.before, JSON.stringify(navigated));
