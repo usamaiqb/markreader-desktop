@@ -1,17 +1,10 @@
 name: CI
 
-# TEMPORARILY DISABLED. No automatic triggers - nothing runs on push, PR or tag.
-# A run can still be started by hand from the Actions tab.
-#
-# To re-enable, replace the `on:` block below with:
-#
-#   on:
-#     pull_request:
-#       branches: [ main ]
-#     push:
-#       branches: [ main ]
-#
 on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -146,3 +139,24 @@ jobs:
             src-tauri/target/release/markreader
             src-tauri/target/release/markreader.exe
             src-tauri/target/release/bundle/**
+
+  # The one check the main-branch ruleset requires. A matrix reports a check per OS, and a
+  # job skipped because its dependency failed counts as passing, so this gate runs
+  # regardless and fails unless every job above succeeded.
+  gate:
+    name: Test, lint & build
+    needs: [ check-version, build ]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required job did not succeed ($result)."
+              exit 1
+            fi
+          done
