@@ -162,19 +162,31 @@
 		log('');
 		log('--- outline navigation ---');
 		const scrollBeforeNav = window.scrollY;
-		document.querySelectorAll('#toc-list .toc-entry')[8]?.click();
-		// The reveal is a smooth scroll, which a GPU-less runner can be slow to even start, so
-		// wait for movement and then for it to come to rest, rather than a fixed delay.
-		await waitFor('outline click to scroll', () => window.scrollY > scrollBeforeNav, 5000).catch(() => {});
-		let lastScroll = -1;
-		await waitFor('scroll to settle', () => {
-			const settled = window.scrollY === lastScroll;
-			lastScroll = window.scrollY;
-			return settled;
-		}, 5000).catch(() => {});
-		const navigated = { before: scrollBeforeNav, after: window.scrollY };
+		// The reveal is a smooth scroll, and under xvfb WebKitGTK sometimes never ticks the
+		// animation at all — scrollY stays put however long we wait. So check what the app
+		// controls: that the click asked to scroll down the page.
+		const nativeScrollTo = window.scrollTo;
+		let requestedTop = null;
+		window.scrollTo = function (options) {
+			requestedTop = typeof options === 'object' ? options.top : arguments[1];
+			return nativeScrollTo.apply(this, arguments);
+		};
+		try {
+			document.querySelectorAll('#toc-list .toc-entry')[8]?.click();
+		} finally {
+			window.scrollTo = nativeScrollTo;
+		}
 		check('clicking an outline entry scrolls the document',
-			navigated.after > navigated.before, JSON.stringify(navigated));
+			requestedTop !== null && requestedTop > scrollBeforeNav,
+			JSON.stringify({ before: scrollBeforeNav, requested: requestedTop }));
+
+		// Give a working animation the chance to land; if the engine never ran it, jump there so
+		// the later checks (scroll spy, scroll held across live reload) see a scrolled page
+		// rather than passing trivially at the top.
+		if (requestedTop !== null) {
+			await waitFor('outline scroll to land', () => Math.abs(window.scrollY - requestedTop) < 2, 3000)
+				.catch(() => nativeScrollTo.call(window, { top: requestedTop, behavior: 'instant' }));
+		}
 
 		const activeToc = document.querySelectorAll('#toc-list .toc-entry.active').length;
 		check('scroll spy marks exactly one active outline entry', activeToc === 1, `got ${activeToc}`);
