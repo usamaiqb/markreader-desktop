@@ -14,4 +14,4 @@ adheres to [Semantic Versioning](https://semver.org).
 - Folder browsing with a Markdown file sidebar
 - File watching with live reload
 - Settings persisted to `settings.json` in the platform config directory, hand-editable and the only way to set `fontSize`, `lineHeight`, `fontFamily` and the KaTeX `mathMacros` table
-- Cross-platform shell (Tauri) with installers for Windows (NSIS), Linux (deb, AppImage), and macOS (dmg)
+- Cross-platform shell (Tauri) with installers for Windows (NSIS) and Linux (deb, AppImage)

@@ -2,7 +2,7 @@
 	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
 	"productName": "MarkReader",
 	"version": "0.1.0",
-	"identifier": "com.markreader.app",
+	"identifier": "com.markreader.desktop",
 	"build": {
 		"frontendDist": "../out/renderer",
 		"beforeDevCommand": "npm run build",
@@ -40,6 +40,18 @@
 				"role": "Viewer"
 			}
 		],
+		"linux": {
+			"deb": {
+				"files": {
+					"/usr/share/metainfo/com.markreader.desktop.metainfo.xml": "../metadata/com.markreader.desktop.metainfo.xml"
+				}
+			},
+			"appimage": {
+				"files": {
+					"/usr/share/metainfo/com.markreader.desktop.metainfo.xml": "../metadata/com.markreader.desktop.metainfo.xml"
+				}
+			}
+		},
 		"windows": {
 			"nsis": {
 				"installMode": "currentUser",

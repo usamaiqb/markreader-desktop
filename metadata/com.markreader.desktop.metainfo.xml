@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata, read by software centres (GNOME Software, KDE Discover) and Flathub.
+     Installed to /usr/share/metainfo/ by the deb and AppImage bundles; see tauri.conf.json.
+     Add a <release> entry for every tagged version. -->
+<component type="desktop-application">
+  <id>com.markreader.desktop</id>
+  <launchable type="desktop-id">MarkReader.desktop</launchable>
+
+  <name>MarkReader</name>
+  <summary>Read Markdown exactly as VS Code previews it</summary>
+  <developer id="com.markreader">
+    <name>DigiGate</name>
+  </developer>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <description>
+    <p>
+      MarkReader is a fast, standalone Markdown reader. It renders documents with the same
+      stylesheets as Visual Studio Code's Markdown preview, so they look just as they do there,
+      without an editor.
+    </p>
+    <ul>
+      <li>CommonMark and GitHub tables, syntax highlighting, KaTeX math and mermaid diagrams</li>
+      <li>Open a folder and browse its Markdown files in a sidebar</li>
+      <li>Live reload that keeps your scroll position when the file changes</li>
+      <li>An outline pane, in-document search, and light and dark themes</li>
+      <li>Everything runs locally, with no telemetry</li>
+    </ul>
+  </description>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>A folder of notes with the file sidebar and document outline</caption>
+      <image type="source" width="2240" height="1400">https://raw.githubusercontent.com/usamaiqb/markreader-desktop/v0.1.0/metadata/screenshots/01-main-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Diagrams, math and highlighted code, rendered like VS Code's preview</caption>
+      <image type="source" width="2240" height="1400">https://raw.githubusercontent.com/usamaiqb/markreader-desktop/v0.1.0/metadata/screenshots/02-rendering-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The dark theme</caption>
+      <image type="source" width="2240" height="1400">https://raw.githubusercontent.com/usamaiqb/markreader-desktop/v0.1.0/metadata/screenshots/01-main-dark.png</image>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://github.com/usamaiqb/markreader-desktop</url>
+  <url type="bugtracker">https://github.com/usamaiqb/markreader-desktop/issues</url>
+  <url type="vcs-browser">https://github.com/usamaiqb/markreader-desktop</url>
+
+  <provides>
+    <mediatype>text/markdown</mediatype>
+  </provides>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-10-12"/>
+  </releases>
+</component>
