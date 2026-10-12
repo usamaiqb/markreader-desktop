@@ -25,7 +25,8 @@
     "check:version": "node scripts/check-version.mjs",
     "build:esm": "node scripts/build-esm.mjs",
     "verify:esm": "node test/verify-unbundled.mjs",
-    "serve:esm": "node scripts/serve-esm.mjs"
+    "serve:esm": "node scripts/serve-esm.mjs",
+    "screenshots": "npm run build && node scripts/screenshots/capture.mjs"
   },
   "keywords": [
     "markdown",

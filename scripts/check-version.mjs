@@ -22,34 +22,32 @@ const fix = process.argv.includes('--fix');
 const packageJsonPath = path.join(root, 'package.json');
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 const expected = packageJson.version;
+const packageLockPath = path.join(root, 'package-lock.json');
+
+/** Rewrites a JSON file in place, keeping whatever indentation it already uses. */
+function updateJson(file, mutate) {
+	const text = fs.readFileSync(file, 'utf8');
+	const indent = /^[ \t]+/m.exec(text)?.[0] ?? '  ';
+	const json = JSON.parse(text);
+	mutate(json);
+	fs.writeFileSync(file, JSON.stringify(json, null, indent) + '\n');
+}
 
 const sources = [
 	{
 		name: 'package.json',
 		read: () => JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).version,
-		write: v => {
-			const json = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-			json.version = v;
-			fs.writeFileSync(packageJsonPath, JSON.stringify(json, null, '\t') + '\n');
-		},
+		write: v => updateJson(packageJsonPath, json => { json.version = v; }),
 	},
 	{
 		name: 'package-lock.json (root)',
-		read: () => JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8')).version,
-		write: v => {
-			const json = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
-			json.version = v;
-			fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(json, null, '  ') + '\n');
-		},
+		read: () => JSON.parse(fs.readFileSync(packageLockPath, 'utf8')).version,
+		write: v => updateJson(packageLockPath, json => { json.version = v; }),
 	},
 	{
 		name: 'package-lock.json (packages[""])',
-		read: () => JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8')).packages[''].version,
-		write: v => {
-			const json = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
-			json.packages[''].version = v;
-			fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(json, null, '  ') + '\n');
-		},
+		read: () => JSON.parse(fs.readFileSync(packageLockPath, 'utf8')).packages[''].version,
+		write: v => updateJson(packageLockPath, json => { json.packages[''].version = v; }),
 	},
 	{
 		name: 'src-tauri/Cargo.toml',

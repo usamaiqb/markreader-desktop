@@ -19,7 +19,7 @@ use crate::AppState;
 
 const FILE_NAME: &str = "settings.json";
 
-/// `%APPDATA%/com.markreader.app/settings.json` and its equivalents; the same directory Tauri
+/// `%APPDATA%/com.markreader.desktop/settings.json` and its equivalents; the same directory Tauri
 /// hands the rest of the app for per-user state.
 ///
 /// A `--smoke` run is redirected to its own scratch copy — see `Smoke::settings_path`.

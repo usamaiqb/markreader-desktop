@@ -152,9 +152,9 @@ lays out its output with them; `<style>` elements do not.
 
 ## Settings
 
-Settings live in `settings.json` in the platform config directory: `%APPDATA%/com.markreader.app`
-on Windows, `~/.config/com.markreader.app` on Linux, and
-`~/Library/Application Support/com.markreader.app` on macOS. It is written on every change and
+Settings live in `settings.json` in the platform config directory: `%APPDATA%/com.markreader.desktop`
+on Windows, `~/.config/com.markreader.desktop` on Linux, and
+`~/Library/Application Support/com.markreader.desktop` on macOS. It is written on every change and
 is meant to be hand-editable — `fontSize`, `lineHeight`, `fontFamily` and the KaTeX
 `mathMacros` table have no menu item and can only be set there.
 

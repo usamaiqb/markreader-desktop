@@ -17,19 +17,34 @@ preview — the stylesheets are the same files, carried over unchanged — with 
 - **Small and private** — a ~5MB executable built on [Tauri](https://tauri.app), no telemetry,
   everything runs locally
 
+## Screenshots
+
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="metadata/screenshots/01-main-dark.png">
+    <img width="49%" alt="MarkReader showing a folder of notes, with the file sidebar on the left, a rendered document with a table and task list, and the outline on the right" src="metadata/screenshots/01-main-light.png">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="metadata/screenshots/02-rendering-dark.png">
+    <img width="49%" alt="A mermaid flowchart, KaTeX equations and syntax-highlighted Rust code rendered in MarkReader" src="metadata/screenshots/02-rendering-light.png">
+  </picture>
+</p>
+
 ## Download
 
-Each tagged release publishes installers for Windows, Linux, and macOS on the
+Each tagged release publishes installers for Windows and Linux on the
 [Releases page](https://github.com/usamaiqb/markreader-desktop/releases):
 
 | Platform | Format |
 | --- | --- |
 | Windows | `.exe` (NSIS installer) |
 | Linux | `.deb` and `.AppImage` |
-| macOS | `.dmg` |
 
 No version has been tagged yet, so that page is empty — until the first release,
 [build from source](#building-from-source).
+
+The Windows installer is not yet code-signed: on first launch SmartScreen warns about an
+unrecognised app — choose **More info → Run anyway**.
 
 Once installed, double-clicking any `.md` or `.markdown` file opens it in MarkReader.
 
@@ -47,13 +62,12 @@ Once installed, double-clicking any `.md` or `.markdown` file opens it in MarkRe
 | Zoom | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` |
 | Full screen | `F11` |
 
-Open a document from the terminal (cross-platform, via the npm `bin` shim):
+Open a document from the terminal:
 
-```bash
-npm link               # once, from the project root
-markreader notes.md    # relative to your current directory
-markreader /docs/spec.md
-```
+| Platform | Command |
+| --- | --- |
+| Linux (`.deb`) | `markreader notes.md` |
+| Windows | `& "$env:LOCALAPPDATA\MarkReader\MarkReader.exe" notes.md` |
 
 A second launch doesn't start a second app — it hands the file to the running window.
 
