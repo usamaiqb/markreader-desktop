@@ -80,6 +80,10 @@ build+test+package matrix across Windows, Linux, and macOS. Each OS runs typeche
 the frontend unit tests, clippy, `cargo test`, the DOM smoke suite, and — after packaging —
 the packaged-app verification. All actions are SHA-pinned with `permissions: contents: read`.
 
+A final `Test, lint & build` job passes only when every job above did. That job and
+`Conventional Commit title` are the two checks `main` requires before a PR can merge, so
+renaming either one means updating the branch ruleset too.
+
 ## Release process
 
 Releases are tag-driven — pushing `vX.Y.Z` triggers `.github/workflows/release.yml`, which:
