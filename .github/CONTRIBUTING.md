@@ -68,7 +68,7 @@ npm run check:version    # all version files in sync
 
 - `npm run test:unit` runs the renderer's pure logic (engine, slugify, paths, util) against
   vitest in Node — no webview needed.
-- `npm test` builds the frontend first, then runs the in-app smoke suite (43 assertions
+- `npm test` builds the frontend first, then runs the in-app smoke suite (assertions
   covering front matter, slugs, highlighting, math, mermaid, image loading, outline, find,
   theming, the folder sidebar, and live reload).
 - `npm run verify:packaged` re-runs the whole suite against a release binary — do this after
@@ -108,7 +108,7 @@ the packaged-app verification. All actions are SHA-pinned with `permissions: con
 Releases are tag-driven — pushing `vX.Y.Z` triggers `.github/workflows/release.yml`, which:
 
 1. Guards: tag matches `package.json` version, all version files are in sync, tree is clean.
-2. Re-tests the tagged commit, builds all three installers, and uploads them.
+2. Re-tests the tagged commit, builds the Windows and Linux installers, and uploads them.
 3. Creates a GitHub Release with auto-generated notes grouped by label.
 
 To cut a release:
