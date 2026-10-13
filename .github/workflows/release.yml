@@ -1,16 +1,8 @@
 name: Release
 
-# TEMPORARILY DISABLED. No automatic triggers - nothing runs on push, PR or tag.
-# A run can still be started by hand from the Actions tab.
-#
-# To re-enable, replace the `on:` block below with:
-#
-#   on:
-#     push:
-#       tags: [ 'v*' ]
-#
 on:
-  workflow_dispatch:
+  push:
+    tags: [ 'v*' ]
 
 permissions:
   contents: write   # required to create the GitHub Release
