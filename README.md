@@ -1,52 +1,53 @@
-# MarkReader
+<h1 align="center">MarkReader</h1>
 
-A fast, standalone desktop Markdown reader. It renders Markdown exactly like VS Code's
-preview — the stylesheets are the same files, carried over unchanged — with no editor required.
+<p align="center">
+  A fast, standalone desktop Markdown reader that renders exactly like VS Code's preview, with no editor required.
+</p>
 
-## Features
+<p align="center">
+  <a href="https://github.com/usamaiqb/markreader-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/usamaiqb/markreader-desktop?label=release" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License: GPL-3.0"></a>
+  <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-lightgrey" alt="Platforms">
+  <img src="https://img.shields.io/badge/built%20with-Tauri-orange" alt="Built with Tauri">
+</p>
 
-- **Faithful rendering** — CommonMark + GFM tables, syntax highlighting, math (KaTeX), and
-  mermaid diagrams, styled by those same stylesheets
-- **Open from anywhere** — file picker, drag-and-drop, terminal, or double-click a `.md` file
-- **Folder browsing** — open a folder and browse its Markdown files in a sidebar
-- **Live reload** — the open document re-renders on save, holding your scroll position
-- **Outline, find, themes** — an outline pane with scroll spy, in-document search, and
-  light/dark themes that follow your OS
-- **Settings that stick** — theme, word wrap, front-matter style and the rest are saved to
-  `settings.json` in your config directory
-- **Small and private** — a ~5MB executable built on [Tauri](https://tauri.app), no telemetry,
-  everything runs locally
-
-## Screenshots
-
-<p>
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="metadata/screenshots/01-main-dark.png">
-    <img width="49%" alt="MarkReader showing a folder of notes, with the file sidebar on the left, a rendered document with a table and task list, and the outline on the right" src="metadata/screenshots/01-main-light.png">
-  </picture>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="metadata/screenshots/02-rendering-dark.png">
-    <img width="49%" alt="A mermaid flowchart, KaTeX equations and syntax-highlighted Rust code rendered in MarkReader" src="metadata/screenshots/02-rendering-light.png">
+    <img src="metadata/screenshots/01-main-light.png" alt="MarkReader showing a folder of notes, with the file sidebar on the left, a rendered document with a table and task list, and the outline on the right" width="800">
   </picture>
 </p>
 
 ## Download
 
-Each tagged release publishes installers for Windows and Linux on the
-[Releases page](https://github.com/usamaiqb/markreader-desktop/releases):
+Grab the latest installer from the **[Releases page](https://github.com/usamaiqb/markreader-desktop/releases/latest)**.
 
-| Platform | Format |
-| --- | --- |
-| Windows | `.exe` (NSIS installer) |
-| Linux | `.deb` and `.AppImage` |
+| Platform | Format                  |
+| -------- | ----------------------- |
+| Windows  | `.exe` (NSIS installer) |
+| Linux    | `.deb` and `.AppImage`  |
 
-No version has been tagged yet, so that page is empty — until the first release,
-[build from source](#building-from-source).
-
-The Windows installer is not yet code-signed: on first launch SmartScreen warns about an
-unrecognised app — choose **More info → Run anyway**.
+> **Windows note:** the installer is not yet code-signed, so SmartScreen may warn on first launch. Choose **More info → Run anyway**.
 
 Once installed, double-clicking any `.md` or `.markdown` file opens it in MarkReader.
+
+## Why MarkReader?
+
+- **Faithful rendering:** CommonMark, GFM tables, syntax highlighting, KaTeX math and Mermaid diagrams, using the same stylesheets as VS Code's preview
+- **Open from anywhere:** file picker, drag-and-drop, terminal, or double-click
+- **Folder browsing** with a sidebar of your Markdown files
+- **Live reload** that keeps your scroll position
+- **Outline, find and themes** that follow your OS
+- **Small and private:** a ~5MB executable, no telemetry, everything runs locally
+
+## Screenshots
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="metadata/screenshots/02-rendering-dark.png">
+    <img src="metadata/screenshots/02-rendering-light.png" alt="A mermaid flowchart, KaTeX equations and syntax-highlighted Rust code rendered in MarkReader" width="800">
+  </picture>
+</p>
 
 ## Usage
 
