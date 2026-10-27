@@ -30,9 +30,14 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 		.item(&item("open_folder", "Open Folder…", Some("CmdOrCtrl+Shift+O"))?)
 		.separator()
 		.item(&item("reload", "Reload Document", Some("CmdOrCtrl+R"))?)
+		.separator()
+		.item(&item("close_tab", "Close Tab", Some("CmdOrCtrl+W"))?)
+		.item(&item("reopen_closed_tab", "Reopen Closed Tab", Some("CmdOrCtrl+Shift+T"))?)
 		.separator();
+	// Cmd+W closes a tab now, as it does in every tabbed Mac app, so closing the window moves to
+	// Cmd+Shift+W. The predefined item cannot be rebound, hence one of our own.
 	let file = if cfg!(target_os = "macos") {
-		file.close_window()
+		file.item(&item("close_window", "Close Window", Some("CmdOrCtrl+Shift+W"))?)
 	} else {
 		file.quit()
 	}
@@ -118,6 +123,13 @@ pub fn handle_event(app: &AppHandle, id: &str) {
 		"open_file" => commands::pick_file(app, WINDOW_LABEL),
 		"open_folder" => commands::pick_folder(app, WINDOW_LABEL),
 		"reload" => emit(app, "command:reloadDocument", ()),
+		"close_tab" => emit(app, "command:closeTab", ()),
+		"reopen_closed_tab" => emit(app, "command:reopenClosedTab", ()),
+		"close_window" => {
+			if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+				let _ = window.close();
+			}
+		}
 		"find" => emit(app, "command:find", ()),
 		"toggle_sidebar" => emit(app, "command:toggleSidebar", ()),
 		"toggle_toc" => emit(app, "command:toggleToc", ()),

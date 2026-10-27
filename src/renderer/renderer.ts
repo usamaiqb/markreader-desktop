@@ -12,14 +12,29 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DocumentView } from './document';
-import { startDesktopShell } from './shell';
+import type { DocumentHost } from './host';
+import { startDesktopShell, type DesktopShell } from './shell';
 
 const api = window.markreader;
 
+/**
+ * The view's host is the bridge, except that a link opens a tab — and tabs are the shell's,
+ * which needs the view before it exists. Hence the late binding: no link can be clicked
+ * before the shell is up.
+ */
+let shell: DesktopShell | undefined;
+const host: DocumentHost = {
+	capabilities: api.capabilities,
+	openExternal: url => api.openExternal(url),
+	openPath: (filePath, options) => shell?.openPath(filePath, options) ?? api.openPath(filePath),
+	readFile: filePath => api.readFile(filePath),
+	showInFolder: async filePath => api.showInFolder?.(filePath),
+};
+
 const view = new DocumentView({
 	root: document.getElementById('markdown-body')!,
-	host: api,
+	host,
 	scroller: document.getElementById('viewer')!,
 });
 
-startDesktopShell({ view, api });
+shell = startDesktopShell({ view, api });

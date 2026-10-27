@@ -95,6 +95,8 @@ const api: MarkReaderApi = {
 
 	syncDocuments: (open: readonly string[], active: string | undefined): Promise<void> =>
 		invoke('sync_documents', { open, active: active ?? null }),
+	noteRecentDocument: (filePath: string): Promise<void> =>
+		invoke('note_recent_document', { path: filePath }),
 
 	onDocumentOpened: (h: (doc: MarkDocument) => void) => subscribe('document:opened', h),
 	onDocumentChanged: (h: (doc: MarkDocument) => void) => subscribe('document:changed', h),

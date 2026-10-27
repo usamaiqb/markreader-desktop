@@ -239,6 +239,14 @@ export class TabsModel {
 		this.closeMany([id]);
 	}
 
+	/**
+	 * Closes a tab without recording it for `reopenClosed` — for a tab whose file has gone, which
+	 * reopening would only fail on again, and keep putting back on top of the ones behind it.
+	 */
+	discard(id: number): void {
+		this.closeMany([id], { record: false });
+	}
+
 	closeOthers(id: number): void {
 		this.closeMany(this.list.filter(tab => tab.id !== id).map(tab => tab.id));
 	}
@@ -283,7 +291,7 @@ export class TabsModel {
 		return this.closed.some(entry => !this.find(entry.path));
 	}
 
-	private closeMany(ids: readonly number[]): void {
+	private closeMany(ids: readonly number[], { record = true } = {}): void {
 		const closing = new Set(ids.filter(id => this.get(id)));
 		if (!closing.size) {
 			return;
@@ -293,7 +301,7 @@ export class TabsModel {
 		// Recorded left to right, so reopening brings them back right to left and each lands at
 		// the index it had.
 		for (const [index, tab] of this.list.entries()) {
-			if (closing.has(tab.id)) {
+			if (record && closing.has(tab.id)) {
 				this.closed.push({ path: tab.path, viewerId: tab.viewerId, viewState: tab.viewState, index });
 			}
 		}

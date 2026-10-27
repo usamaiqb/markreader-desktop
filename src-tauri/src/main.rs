@@ -119,6 +119,7 @@ fn run() -> i32 {
 			commands::open_document,
 			commands::open_folder,
 			commands::read_document,
+			commands::note_recent_document,
 			commands::sync_documents,
 			commands::open_external,
 			commands::reveal_in_folder,

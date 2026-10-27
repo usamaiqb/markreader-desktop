@@ -83,6 +83,12 @@ export const NO_CAPABILITIES: HostCapabilities = {
 	watchesFiles: false,
 };
 
+/** How the reader asked for a document — a link clicked plainly, or with Ctrl or the middle button. */
+export interface OpenPathOptions {
+	/** Open it without showing it, where the host can hold more than one document. */
+	readonly background?: boolean;
+}
+
 /**
  * What the document module needs from its host. Optional members are capabilities: a host
  * that cannot do one omits it, and the document degrades instead of throwing. Android has no
@@ -93,8 +99,11 @@ export interface DocumentHost {
 	readonly capabilities?: HostCapabilities;
 	/** Open a URL outside the app. Hosts must allowlist the schemes they will act on. */
 	openExternal(url: string): Promise<void>;
-	/** Ask the host to open another document; it answers with an `onDocumentOpened` event. */
-	openPath(filePath: string): Promise<void>;
+	/**
+	 * Ask the host to open another document. A host showing one document at a time answers
+	 * with an `onDocumentOpened` event and may ignore `options`.
+	 */
+	openPath(filePath: string, options?: OpenPathOptions): Promise<void>;
 	readFile(filePath: string): Promise<MarkDocument | undefined>;
 	showInFolder?(filePath: string): Promise<void>;
 }
@@ -116,6 +125,11 @@ export interface MarkReaderApi extends DocumentHost {
 	 * empty, when nothing is showing.
 	 */
 	syncDocuments(open: readonly string[], active: string | undefined): Promise<void>;
+	/**
+	 * Add a document the renderer opened itself, through `readFile`, to the OS recent-documents
+	 * list. `openPath` does this on its own.
+	 */
+	noteRecentDocument(filePath: string): Promise<void>;
 	onDocumentOpened(h: (doc: MarkDocument) => void): () => void;
 	onDocumentChanged(h: (doc: MarkDocument) => void): () => void;
 	onFolderOpened(h: (payload: FolderPayload) => void): () => void;
