@@ -6,12 +6,13 @@
  *  rewriting them to this scheme is what replaces VS Code's `asWebviewUri()`.
  *--------------------------------------------------------------------------------------------*/
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use percent_encoding::percent_decode_str;
 use tauri::{http, Manager, Runtime, UriSchemeContext, UriSchemeResponder};
 
-use crate::AppState;
+use crate::{AppState, WindowState};
 
 /// The directories this scheme will serve from.
 ///
@@ -23,10 +24,16 @@ use crate::AppState;
 ///
 /// Two slots rather than a growing set: a document may reference assets beside itself, and
 /// anything inside the opened folder. Both are replaced as you navigate, so leaving a document
-/// takes its directory's permission with it.
+/// takes its directory's permission with it. With several documents open in a window, only
+/// the active one's directory is a root — a background document's directory is not readable
+/// by the page until it is the one being shown.
+///
+/// Each window has its own, in `crate::WindowState`, and a request is checked only against
+/// the roots of the window whose webview made it — so a document in one window cannot read
+/// beside a document open in another.
 #[derive(Default)]
 pub struct ResourceRoots {
-	/// Directory holding the document currently open.
+	/// Directory holding the window's active document.
 	document: Option<PathBuf>,
 	/// The opened folder, when there is one.
 	folder: Option<PathBuf>,
@@ -35,6 +42,11 @@ pub struct ResourceRoots {
 impl ResourceRoots {
 	pub fn set_document(&mut self, document: &Path) {
 		self.document = document.parent().map(canonical);
+	}
+
+	/// No active document, or one that is not a file on disk — the About page, say.
+	pub fn clear_document(&mut self) {
+		self.document = None;
 	}
 
 	pub fn set_folder(&mut self, folder: &Path) {
@@ -93,13 +105,26 @@ pub fn handle<R: Runtime>(
 	let roots = context
 		.app_handle()
 		.try_state::<AppState>()
-		.and_then(|state| state.resource_roots.lock().ok().map(|roots| roots.snapshot()))
+		.and_then(|state| {
+			let windows = state.windows.lock().ok()?;
+			Some(roots_for(&windows, context.webview_label()))
+		})
 		.unwrap_or_default();
 
 	// Reading from disk on the webview's own thread stalls it, so the request is answered
 	// asynchronously.
 	let uri = request.uri().clone();
 	std::thread::spawn(move || responder.respond(serve(&uri, &roots)));
+}
+
+/// The roots of the window a request came from. A webview with no window state — one that has
+/// never had a document or folder opened, or one this file does not know about — gets none,
+/// so every request from it is refused.
+fn roots_for(windows: &HashMap<String, WindowState>, label: &str) -> Vec<PathBuf> {
+	windows
+		.get(label)
+		.map(|window| window.roots.snapshot())
+		.unwrap_or_default()
 }
 
 fn serve(uri: &http::Uri, roots: &[PathBuf]) -> http::Response<Vec<u8>> {
@@ -254,5 +279,30 @@ mod tests {
 		roots.set_folder(&fixture.base);
 		// `secret.txt` is outside the document's directory but inside the opened folder.
 		assert!(is_allowed(&fixture.base.join("secret.txt"), &roots.snapshot()));
+	}
+
+	#[test]
+	fn a_request_is_checked_against_its_own_window_only() {
+		let fixture = Fixture::new("windows");
+		let mut windows = HashMap::new();
+		let mut main = WindowState::default();
+		main.roots.set_document(&fixture.base.join("docs").join("index.md"));
+		windows.insert("main".to_owned(), main);
+		windows.insert("other".to_owned(), WindowState::default());
+
+		let inside = fixture.base.join("docs").join("a.png");
+		assert!(is_allowed(&inside, &roots_for(&windows, "main")));
+		// Another window's roots do not carry over, and an unknown webview fails closed.
+		assert!(!is_allowed(&inside, &roots_for(&windows, "other")));
+		assert!(!is_allowed(&inside, &roots_for(&windows, "unknown")));
+	}
+
+	#[test]
+	fn clearing_the_document_releases_its_directory() {
+		let fixture = Fixture::new("cleared");
+		let mut roots = ResourceRoots::default();
+		roots.set_document(&fixture.base.join("docs").join("index.md"));
+		roots.clear_document();
+		assert!(!is_allowed(&fixture.base.join("docs").join("a.png"), &roots.snapshot()));
 	}
 }

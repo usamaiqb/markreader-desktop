@@ -2,8 +2,8 @@
 // Copyright (c) 2026 DigiGate
 
 /*---------------------------------------------------------------------------------------------
- *  Opening, reading and watching the current document — path resolution, encoding detection,
- *  and the events the frontend listens for.
+ *  Opening, reading and watching a window's documents — path resolution, encoding detection,
+ *  the per-window open set, and the events the frontend listens for.
  *--------------------------------------------------------------------------------------------*/
 
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
-use crate::{AppState, WINDOW_LABEL};
+use crate::AppState;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MarkDocument {
@@ -138,8 +138,14 @@ pub fn read_or_report(app: &AppHandle, path: &Path) -> Option<MarkDocument> {
 	}
 }
 
-/// Opens a document, starts watching it for changes, and pushes it to the renderer.
-pub fn open(app: &AppHandle, path: &Path) {
+/// Opens a document from outside the page — the dialog, the command line, a second instance,
+/// the OS — in the window `label`: adds it to that window's open set, makes it the active one,
+/// and pushes it to the renderer.
+///
+/// It adds rather than replaces because the renderer owns the open set and follows up with
+/// `sync`, which is the source of truth; until it does, the documents already open there must
+/// keep reloading on save.
+pub fn open(app: &AppHandle, label: &str, path: &Path) {
 	let path = resolve(path);
 	let Some(doc) = read_or_report(app, &path) else {
 		return;
@@ -147,46 +153,107 @@ pub fn open(app: &AppHandle, path: &Path) {
 
 	crate::recent::add(&path);
 
-	if let Some(state) = app.try_state::<AppState>() {
-		if let Ok(mut watcher) = state.watcher.lock() {
-			watcher.watch(&path, app.clone());
-		}
-		// Before the document reaches the page, so its assets can be fetched the moment it
-		// renders and nothing outside its directory can be.
-		if let Ok(mut roots) = state.resource_roots.lock() {
-			roots.set_document(&path);
-		}
-	}
+	// Before the document reaches the page, so its assets can be fetched the moment it renders
+	// and nothing outside its directory can be.
+	with_window(app, label, |window| {
+		let mut files = window.watcher.files().to_vec();
+		files.push(path.clone());
+		window.watcher.reconcile(&files, app, label);
+		window.roots.set_document(&path);
+	});
 
-	let _ = app.emit("document:opened", doc);
+	let _ = app.emit_to(label, "document:opened", doc);
 
-	if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-		let name = path
-			.file_name()
-			.map(|n| n.to_string_lossy().into_owned())
-			.unwrap_or_default();
-		let _ = window.set_title(&format!("{name} — MarkReader"));
-	}
+	set_title(app, label, Some(&file_name(&path)));
 }
 
-/// Scans a folder and pushes the sidebar list, as `promptOpenFolder` did.
-pub fn open_folder(app: &AppHandle, root: &Path) {
+/// Replaces the window's open set with the renderer's: watches exactly `open`, and serves
+/// `mdr://` from beside `active`. Returns once the roots are in place, so a renderer that
+/// awaits it can render with its images resolving on first paint.
+///
+/// Paths that are not absolute files on disk — the renderer's virtual About document — are
+/// neither watched nor made a root. Such a path as `active` still names the window, by its last
+/// path segment, so the title reads the same as the tab. An `active` that is a file but not in
+/// `open` is served from but not watched: watching follows `open` and nothing else.
+pub fn sync(app: &AppHandle, label: &str, open: &[String], active: Option<&str>) {
+	let files: Vec<PathBuf> = open.iter().filter_map(|path| on_disk(path)).collect();
+	let active_file = active.and_then(on_disk);
+
+	with_window(app, label, |window| {
+		window.watcher.reconcile(&files, app, label);
+		match &active_file {
+			Some(path) => window.roots.set_document(path),
+			None => window.roots.clear_document(),
+		}
+	});
+
+	let name = match (&active_file, active) {
+		(Some(path), _) => Some(file_name(path)),
+		(None, Some(virtual_path)) => Some(last_segment(virtual_path).to_owned()),
+		(None, None) => None,
+	};
+	set_title(app, label, name.as_deref());
+}
+
+/// Scans a folder for the window `label` and pushes the sidebar list, as `promptOpenFolder`
+/// did.
+pub fn open_folder(app: &AppHandle, label: &str, root: &Path) {
 	let root = resolve(root);
 
-	if let Some(state) = app.try_state::<AppState>() {
-		if let Ok(mut roots) = state.resource_roots.lock() {
-			roots.set_folder(&root);
-		}
-	}
+	with_window(app, label, |window| window.roots.set_folder(&root));
 
 	let entries = crate::tree::list_markdown_tree(&root);
-	let _ = app.emit(
+	let _ = app.emit_to(
+		label,
 		"folder:opened",
 		serde_json::json!({
 			"root": root.to_string_lossy(),
 			"entries": entries,
 		}),
 	);
+}
+
+/// Runs `update` on the window's state, creating it the first time the window opens anything.
+fn with_window(app: &AppHandle, label: &str, update: impl FnOnce(&mut crate::WindowState)) {
+	if let Some(state) = app.try_state::<AppState>() {
+		if let Ok(mut windows) = state.windows.lock() {
+			update(windows.entry(label.to_owned()).or_default());
+		}
+	}
+}
+
+/// A path from the renderer, if it names an absolute file on disk. Relative paths are refused
+/// rather than resolved: the renderer only ever holds absolute ones, so a relative path is one
+/// of its virtual documents, and resolving it against the working directory would invent a
+/// root.
+fn on_disk(path: &str) -> Option<PathBuf> {
+	let path = Path::new(path);
+	(path.is_absolute() && path.is_file()).then(|| resolve(path))
+}
+
+fn file_name(path: &Path) -> String {
+	path.file_name()
+		.map(|n| n.to_string_lossy().into_owned())
+		.unwrap_or_default()
+}
+
+/// The name a virtual document shows as. Split on both separators, since a virtual path follows
+/// no platform's rules.
+fn last_segment(path: &str) -> &str {
+	path.rsplit(['/', '\\'])
+		.find(|segment| !segment.is_empty())
+		.unwrap_or(path)
+}
+
+/// `"<name> — MarkReader"`, or just `"MarkReader"` with nothing active.
+fn set_title(app: &AppHandle, label: &str, name: Option<&str>) {
+	if let Some(window) = app.get_webview_window(label) {
+		let title = match name {
+			Some(name) if !name.is_empty() => format!("{name} — MarkReader"),
+			_ => "MarkReader".to_owned(),
+		};
+		let _ = window.set_title(&title);
+	}
 }
 
 #[cfg(test)]
@@ -209,6 +276,27 @@ mod tests {
 			});
 		}
 		bytes
+	}
+
+	#[test]
+	fn a_virtual_document_is_named_by_its_last_segment() {
+		assert_eq!(last_segment("About MarkReader"), "About MarkReader");
+		assert_eq!(last_segment("/virtual/notes/x.md"), "x.md");
+		assert_eq!(last_segment(r"virtual\x.md"), "x.md");
+		assert_eq!(last_segment("trailing/"), "trailing");
+	}
+
+	#[test]
+	fn only_absolute_files_on_disk_are_watched_or_served() {
+		assert_eq!(on_disk("About MarkReader"), None);
+		assert_eq!(on_disk(""), None);
+		let dir = std::env::temp_dir();
+		// A directory is not a document.
+		assert_eq!(on_disk(&dir.to_string_lossy()), None);
+		let file = dir.join("markreader-document-on-disk.md");
+		std::fs::write(&file, b"# x").expect("fixture file");
+		assert_eq!(on_disk(&file.to_string_lossy()), Some(resolve(&file)));
+		let _ = std::fs::remove_file(&file);
 	}
 
 	#[test]

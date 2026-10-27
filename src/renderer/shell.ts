@@ -21,7 +21,7 @@ import {
 	type ThemeMode,
 } from './config';
 import type { DocumentView, HeadingInfo } from './document';
-import { capabilitiesOf, type MarkReaderApi, type TreeEntry } from './host';
+import { capabilitiesOf, type MarkDocument, type MarkReaderApi, type TreeEntry } from './host';
 import { escapeHtml } from './markdown-language-features/util/dom';
 import { basename, dirname, samePath } from './paths';
 
@@ -33,10 +33,12 @@ export interface ShellOptions {
 export function startDesktopShell({ view, api }: ShellOptions): void {
 	const el = {
 		body: document.body,
+		viewer: document.getElementById('viewer')!,
 		docTitle: document.getElementById('doc-title')!,
 		fileList: document.getElementById('file-list')!,
 		fileFilter: document.getElementById('file-filter') as HTMLInputElement,
 		tocList: document.getElementById('toc-list')!,
+		findBar: document.getElementById('find-bar')!,
 		findInput: document.getElementById('find-input') as HTMLInputElement,
 		findCount: document.getElementById('find-count')!,
 		btnSidebar: document.getElementById('btn-toggle-sidebar')!,
@@ -47,6 +49,8 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 	let treeEntries: readonly TreeEntry[] = [];
 	let headings: readonly HeadingInfo[] = [];
 	let activeSlug: string | undefined;
+	/** What the host was last told is showing, so a live reload does not re-send it. */
+	let syncedPath: string | undefined;
 
 	// ---------------------------------------------------------------------- file list
 
@@ -152,8 +156,61 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 	}
 
 	function closeFind(): void {
+		// Hiding the bar would drop focus on the body, from where keys scroll nothing.
+		if (el.findBar.contains(document.activeElement)) {
+			focusViewer();
+		}
 		el.body.classList.remove('finding');
 		view.closeFind();
+	}
+
+	// ------------------------------------------------------------------------- focus
+
+	/**
+	 * The window does not scroll, so PageDown, Space and the arrows only move the document
+	 * when focus is inside `#viewer`. Focus is put there when a document shows up with nothing
+	 * else focused, and the chrome's buttons do not take it on a mouse press (they still do
+	 * from Tab), so clicking the outline or a toolbar button leaves it where it was.
+	 */
+	function focusViewer(): void {
+		el.viewer.focus({ preventScroll: true });
+	}
+
+	function focusViewerIfUnclaimed(): void {
+		const active = document.activeElement;
+		if (!active || active === el.body) {
+			focusViewer();
+		}
+	}
+
+	for (const chrome of [document.getElementById('toolbar')!, el.fileList, el.tocList, el.findBar]) {
+		chrome.addEventListener('mousedown', event => {
+			if ((event.target as HTMLElement).closest('button')) {
+				event.preventDefault();
+			}
+		});
+	}
+
+	// --------------------------------------------------------------- host documents
+
+	/**
+	 * Scope the host's watching and resource access to what is showing. The About page is the
+	 * shell's own text rather than a file, so it leaves the host's scope as it was.
+	 *
+	 * Today this runs as the view shows the document rather than before, which is safe only
+	 * because there is one document and the backend's own open path has already set the
+	 * roots. With tabs, the shell has to await this before handing the active one to the view.
+	 */
+	function syncHostDocuments(doc: MarkDocument | undefined): void {
+		if (doc?.path === ABOUT_PATH) {
+			return;
+		}
+		const path = doc?.path;
+		if (path === syncedPath) {
+			return;
+		}
+		syncedPath = path;
+		void api.syncDocuments(path === undefined ? [] : [path], path);
 	}
 
 	// ---------------------------------------------------------------- document events
@@ -162,6 +219,10 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 		el.body.classList.toggle('no-document', !doc);
 		updateTitle();
 		renderFileList();
+		syncHostDocuments(doc);
+		if (doc) {
+			focusViewerIfUnclaimed();
+		}
 	});
 
 	view.on('headings', next => {
@@ -290,7 +351,7 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 	api.onCommand('command:find', () => openFind());
 	api.onCommand('command:reloadDocument', () => void view.reload());
 	api.onCommand('command:about', () => {
-		view.setDocument({ path: 'About MarkReader', text: ABOUT_DOCUMENT }, { preserveScroll: false });
+		view.setDocument({ path: ABOUT_PATH, text: ABOUT_DOCUMENT }, { preserveScroll: false });
 	});
 
 	// Keyboard shortcuts that aren't menu accelerators
@@ -357,6 +418,8 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 	renderFileList();
 	view.render();
 }
+
+const ABOUT_PATH = 'About MarkReader';
 
 const ABOUT_DOCUMENT = `# MarkReader
 

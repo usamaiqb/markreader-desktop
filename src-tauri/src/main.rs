@@ -23,6 +23,7 @@ mod smoke;
 mod tree;
 mod watcher;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -32,6 +33,8 @@ use tauri::utils::config::Color;
 use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_opener::OpenerExt;
 
+/// The one window there is today. Per-document state is already keyed by window label (see
+/// `WindowState`); this constant is what still assumes there is only one.
 pub const WINDOW_LABEL: &str = "main";
 
 /// Painted behind the page so resizing never flashes white. The renderer keeps it in step
@@ -43,14 +46,26 @@ const READY_FALLBACK: Duration = Duration::from_secs(2);
 
 /// Everything the commands, the menu and the watcher need to reach.
 pub struct AppState {
-	pub watcher: Mutex<watcher::FileWatcher>,
+	/// Per-window document state, keyed by webview window label. An entry is created the first
+	/// time a window opens a document or folder; a window without one has nothing to watch and
+	/// nothing the `mdr://` scheme will serve it.
+	pub windows: Mutex<HashMap<String, WindowState>>,
 	pub zoom: Mutex<f64>,
 	/// Document from the command line, held until the frontend has listeners attached.
 	pub startup_file: Mutex<Option<PathBuf>>,
 	pub window_shown: AtomicBool,
 	pub smoke: Option<smoke::Smoke>,
-	/// Which directories the `mdr://` scheme will serve from. See `protocol::ResourceRoots`.
-	pub resource_roots: Mutex<protocol::ResourceRoots>,
+}
+
+/// What one window has open. Held per window rather than app-wide so a second window — or a
+/// second tab's worth of documents — never widens what another window's page may read.
+#[derive(Default)]
+pub struct WindowState {
+	/// Live reload for every document open in the window.
+	pub watcher: watcher::FileWatcher,
+	/// Which directories the `mdr://` scheme will serve this window from. See
+	/// `protocol::ResourceRoots`.
+	pub roots: protocol::ResourceRoots,
 }
 
 fn main() {
@@ -67,7 +82,7 @@ fn run() -> i32 {
 	}
 
 	let state = AppState {
-		watcher: Mutex::new(watcher::FileWatcher::default()),
+		windows: Mutex::new(HashMap::new()),
 		zoom: Mutex::new(1.0),
 		startup_file: Mutex::new(cli.file.clone()),
 		window_shown: AtomicBool::new(false),
@@ -75,7 +90,6 @@ fn run() -> i32 {
 			.smoke_script
 			.clone()
 			.map(|script| smoke::Smoke::new(script, cli.smoke_out.clone())),
-		resource_roots: Mutex::new(protocol::ResourceRoots::default()),
 	};
 
 	let exit_code = Arc::new(AtomicI32::new(0));
@@ -92,7 +106,7 @@ fn run() -> i32 {
 				let _ = window.set_focus();
 			}
 			if let Some(file) = cli::parse(argv.into_iter().skip(1)).file {
-				document::open(app, &file);
+				document::open(app, WINDOW_LABEL, &file);
 			}
 		}))
 		.plugin(tauri_plugin_dialog::init())
@@ -105,6 +119,7 @@ fn run() -> i32 {
 			commands::open_document,
 			commands::open_folder,
 			commands::read_document,
+			commands::sync_documents,
 			commands::open_external,
 			commands::reveal_in_folder,
 			commands::set_window_background,
@@ -173,7 +188,7 @@ fn run() -> i32 {
 				for url in urls {
 					if let Ok(path) = url.to_file_path() {
 						if path.is_file() {
-							document::open(app, &path);
+							document::open(app, WINDOW_LABEL, &path);
 							break;
 						}
 					}
@@ -181,8 +196,10 @@ fn run() -> i32 {
 			}
 			tauri::RunEvent::Exit => {
 				if let Some(state) = app.try_state::<AppState>() {
-					if let Ok(mut watcher) = state.watcher.lock() {
-						watcher.dispose();
+					if let Ok(mut windows) = state.windows.lock() {
+						for window in windows.values_mut() {
+							window.watcher.dispose();
+						}
 					}
 				}
 			}

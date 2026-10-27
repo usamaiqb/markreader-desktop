@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::atomic::Ordering;
 
 use tauri::utils::config::Color;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -22,9 +22,22 @@ const MARKDOWN_EXTENSIONS: &[&str] = &[
 	"md", "markdown", "mdown", "mkdn", "mkd", "mdwn", "mdtxt", "mdtext", "workbook",
 ];
 
+/// Page-originated commands answer the window that called them, so the label is taken from
+/// the caller rather than assumed — the same code then serves a second window unchanged.
 #[tauri::command]
-pub fn open_file_dialog(app: AppHandle) {
+pub fn open_file_dialog(app: AppHandle, window: WebviewWindow) {
+	pick_file(&app, window.label());
+}
+
+#[tauri::command]
+pub fn open_folder_dialog(app: AppHandle, window: WebviewWindow) {
+	pick_folder(&app, window.label());
+}
+
+/// The open dialog, for the window `label`. Shared by the command and the menu.
+pub fn pick_file(app: &AppHandle, label: &str) {
 	let handle = app.clone();
+	let label = label.to_owned();
 	// Callback form, not `blocking_pick_file`: a modal that blocks the main thread would
 	// deadlock the event loop this command is dispatched from.
 	app.dialog()
@@ -34,33 +47,42 @@ pub fn open_file_dialog(app: AppHandle) {
 		.add_filter("All Files", &["*"])
 		.pick_file(move |selection| {
 			if let Some(path) = selection.and_then(|p| p.into_path().ok()) {
-				document::open(&handle, &path);
+				document::open(&handle, &label, &path);
 			}
 		});
 }
 
-#[tauri::command]
-pub fn open_folder_dialog(app: AppHandle) {
+/// The folder dialog, for the window `label`.
+pub fn pick_folder(app: &AppHandle, label: &str) {
 	let handle = app.clone();
+	let label = label.to_owned();
 	app.dialog()
 		.file()
 		.set_title("Open folder")
 		.pick_folder(move |selection| {
 			if let Some(root) = selection.and_then(|p| p.into_path().ok()) {
-				document::open_folder(&handle, &root);
+				document::open_folder(&handle, &label, &root);
 			}
 		});
 }
 
 #[tauri::command]
-pub fn open_document(app: AppHandle, path: String) {
-	document::open(&app, Path::new(&path));
+pub fn open_document(app: AppHandle, window: WebviewWindow, path: String) {
+	document::open(&app, window.label(), Path::new(&path));
 }
 
 /// The folder equivalent, used by the CLI and the smoke run to skip the dialog.
 #[tauri::command]
-pub fn open_folder(app: AppHandle, root: String) {
-	document::open_folder(&app, Path::new(&root));
+pub fn open_folder(app: AppHandle, window: WebviewWindow, root: String) {
+	document::open_folder(&app, window.label(), Path::new(&root));
+}
+
+/// The renderer's open set for its window, sent whenever it changes. Synchronous on purpose:
+/// the renderer awaits it before rendering the active document, and the roots must be in place
+/// by then for that document's images to load on first paint. See `document::sync`.
+#[tauri::command]
+pub fn sync_documents(window: WebviewWindow, open: Vec<String>, active: Option<String>) {
+	document::sync(window.app_handle(), window.label(), &open, active.as_deref());
 }
 
 #[tauri::command]
@@ -115,12 +137,12 @@ pub fn save_settings(app: AppHandle, settings: serde_json::Value) {
 /// then there is nobody to receive `document:opened`, so a file from the command line has to
 /// wait here rather than race the listeners.
 #[tauri::command]
-pub fn frontend_ready(app: AppHandle, state: State<'_, AppState>) {
+pub fn frontend_ready(app: AppHandle, window: WebviewWindow, state: State<'_, AppState>) {
 	show_window(&app);
 
 	let startup = state.startup_file.lock().ok().and_then(|mut f| f.take());
 	if let Some(path) = startup {
-		document::open(&app, &path);
+		document::open(&app, window.label(), &path);
 	}
 
 	crate::smoke::start(&app);

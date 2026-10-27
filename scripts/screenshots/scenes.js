@@ -83,10 +83,10 @@
 		// 1. The whole app: file sidebar, document, outline.
 		setPane('has-sidebar', 'btn-toggle-sidebar', true);
 		setPane('has-outline', 'btn-toggle-outline', true);
-		window.scrollTo(0, 0);
+		document.getElementById('viewer').scrollTo(0, 0);
 		for (const theme of ['light', 'dark']) {
 			await setTheme(theme);
-			window.scrollTo(0, 0);
+			document.getElementById('viewer').scrollTo(0, 0);
 			await shot(`01-main-${theme}`);
 		}
 
