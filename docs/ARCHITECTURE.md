@@ -38,6 +38,7 @@ src/
     document.ts          DocumentView: links, find, outline, theming, mermaid — shareable
     mermaid/             ← mermaid-markdown-features vsCodeTheme.ts and its two imports, verbatim
     shell.ts             desktop chrome: file list, outline pane, find bar, menus
+    tabs/model.ts        a window's open tabs: order, active, preview, history — no DOM (desktop only)
     renderer.ts          composition root: introduces the two
     sanitizer.ts         the only place document HTML enters the DOM
     lazy.ts              what a document needs (KaTeX, highlight.js) and loading only that
