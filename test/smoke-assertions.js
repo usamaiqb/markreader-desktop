@@ -352,11 +352,20 @@
 		const emitCommand = channel => invoke('plugin:event|emit', { event: channel, payload: null });
 
 		const strip = document.getElementById('tab-strip');
+		// smoke.mjs launches with two files: the b.md fixture, then the sample.
+		await waitFor('both start-up documents to have tabs', () => tabEls().length === 2 && kitchenShowing())
+			.catch(() => null);
 		const startTabs = tabEls();
-		check('the start-up document has exactly one tab', startTabs.length === 1, tabState());
-		check('the start-up tab is active', startTabs[0]?.classList.contains('active') === true, tabState());
-		check('the start-up tab is pinned, not a preview',
-			startTabs[0] && !startTabs[0].classList.contains('preview'), tabState());
+		check('each file on the command line gets a tab, in order',
+			startTabs.length === 2 && tabPath(startTabs[0]).endsWith('/tabs/b.md') && tabPath(startTabs[1]).endsWith('/samples/kitchen-sink.md'),
+			tabState());
+		check('the last file on the command line is the one showing', kitchenShowing(), tabState());
+		check('the start-up tabs are pinned, not previews',
+			startTabs.length === 2 && startTabs.every(tab => !tab.classList.contains('preview')), tabState());
+
+		// The rest of this section counts tabs from the sample alone.
+		mouse(tabFor('tabs/b.md')?.querySelector('.tab-close'), 'click');
+		check('closing the extra start-up tab leaves the sample', tabEls().length === 1 && kitchenShowing(), tabState());
 		check('the tab strip shows', getComputedStyle(strip).display !== 'none' && strip.offsetHeight > 0,
 			`display ${getComputedStyle(strip).display}, height ${strip.offsetHeight}`);
 

@@ -42,13 +42,16 @@ pub fn pick_file(app: &AppHandle, label: &str) {
 	// deadlock the event loop this command is dispatched from.
 	app.dialog()
 		.file()
-		.set_title("Open Markdown file")
+		.set_title("Open Markdown files")
 		.add_filter("Markdown", MARKDOWN_EXTENSIONS)
 		.add_filter("All Files", &["*"])
-		.pick_file(move |selection| {
-			if let Some(path) = selection.and_then(|p| p.into_path().ok()) {
-				document::open(&handle, &label, &path);
-			}
+		.pick_files(move |selection| {
+			let paths: Vec<_> = selection
+				.unwrap_or_default()
+				.into_iter()
+				.filter_map(|p| p.into_path().ok())
+				.collect();
+			document::open_many(&handle, &label, &paths);
 		});
 }
 
@@ -150,10 +153,15 @@ pub fn save_settings(app: AppHandle, settings: serde_json::Value) {
 pub fn frontend_ready(app: AppHandle, window: WebviewWindow, state: State<'_, AppState>) {
 	show_window(&app);
 
-	let startup = state.startup_file.lock().ok().and_then(|mut f| f.take());
-	if let Some(path) = startup {
-		document::open(&app, window.label(), &path);
-	}
+	// Flagged before the queue is taken, so a file arriving in between is opened rather than
+	// queued behind a take that has already happened.
+	state.frontend_ready.store(true, Ordering::SeqCst);
+	let pending = state
+		.pending_files
+		.lock()
+		.map(|mut files| std::mem::take(&mut *files))
+		.unwrap_or_default();
+	document::open_many(&app, window.label(), &pending);
 
 	crate::smoke::start(&app);
 }

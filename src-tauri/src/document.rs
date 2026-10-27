@@ -167,6 +167,34 @@ pub fn open(app: &AppHandle, label: &str, path: &Path) {
 	set_title(app, label, Some(&file_name(&path)));
 }
 
+/// Opens each of `paths` in turn, as `open` does: each becomes a tab, and the last one is
+/// left showing — the order a file manager or a shell handed them over in.
+pub fn open_many(app: &AppHandle, label: &str, paths: &[PathBuf]) {
+	for path in paths {
+		open(app, label, path);
+	}
+}
+
+/// `open_many`, or — before the frontend has its listeners attached — queued for
+/// `frontend_ready` to open, because an event emitted now would reach nobody. A second launch
+/// or a file from the OS can land in that gap.
+pub fn open_when_ready(app: &AppHandle, label: &str, paths: Vec<PathBuf>) {
+	if paths.is_empty() {
+		return;
+	}
+	if let Some(state) = app.try_state::<AppState>() {
+		if let Ok(mut pending) = state.pending_files.lock() {
+			// Checked under the lock `frontend_ready` takes the queue with, so a file cannot be
+			// queued just after the queue was emptied.
+			if !state.frontend_ready.load(std::sync::atomic::Ordering::SeqCst) {
+				pending.extend(paths);
+				return;
+			}
+		}
+	}
+	open_many(app, label, &paths);
+}
+
 /// Replaces the window's open set with the renderer's: watches exactly `open`, and serves
 /// `mdr://` from beside `active`. Returns once the roots are in place, so a renderer that
 /// awaits it can render with its images resolving on first paint.

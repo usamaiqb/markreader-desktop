@@ -19,7 +19,7 @@ src-tauri/               the backend (Rust)
     menu.rs              application menu; view state lives in the renderer
     settings.rs          settings.json: read at start-up, written on every change
     recent.rs            Windows recent-documents list
-    cli.rs               argv parsing: `markreader notes.md`
+    cli.rs               argv parsing: `markreader notes.md todo.md`
     smoke.rs             the --smoke test hook
   tauri.conf.json        window, bundle and file-association config
   capabilities/          what the window is allowed to call

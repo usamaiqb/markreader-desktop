@@ -52,6 +52,9 @@ async function main() {
 		'--smoke', assertions,
 		'--smoke-out', reportFile,
 		'--smoke-root', root,
+		// Two documents, so the start-up path for several is exercised: each gets a tab, and
+		// the last — the sample, which every later section reads — is left showing.
+		path.join(tmp, 'fixtures', 'tabs', 'b.md'),
 		sample,
 	], {
 		cwd: path.join(root, 'src-tauri'),
