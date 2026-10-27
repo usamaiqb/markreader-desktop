@@ -183,7 +183,10 @@ async function checkItRenders() {
 
 	const { window } = dom;
 	window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-	window.CSS = {};
+	// No Custom Highlight API, but `CSS.escape` is kept: the view looks headings up by escaped
+	// id, and every browser it runs in has it.
+	const css = window.CSS;
+	window.CSS = { escape: value => css.escape(value) };
 	for (const name of ['window', 'document', 'navigator', 'CSS', 'Node', 'NodeFilter', 'Range',
 		'HTMLElement', 'Element', 'getComputedStyle', 'requestAnimationFrame']) {
 		// Assignment, not `globalThis.x =`: Node 24 defines `navigator` as a getter-only

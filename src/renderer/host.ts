@@ -108,6 +108,14 @@ export interface MarkReaderApi extends DocumentHost {
 	readonly settings: Record<string, unknown> | undefined;
 	saveSettings(settings: Record<string, unknown>): Promise<void>;
 	pathForFile(file: File): string | undefined;
+	/**
+	 * Tell the host which documents are open and which one is showing. The host scopes file
+	 * watching and resource access (`mdr://`) to exactly these, so a closed document stops
+	 * being watched or served. The renderer awaits this before rendering the active document,
+	 * so its resources are reachable by the time it paints. `active` is undefined, and `open`
+	 * empty, when nothing is showing.
+	 */
+	syncDocuments(open: readonly string[], active: string | undefined): Promise<void>;
 	onDocumentOpened(h: (doc: MarkDocument) => void): () => void;
 	onDocumentChanged(h: (doc: MarkDocument) => void): () => void;
 	onFolderOpened(h: (payload: FolderPayload) => void): () => void;

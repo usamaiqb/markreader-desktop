@@ -4,9 +4,10 @@
 /*---------------------------------------------------------------------------------------------
  *  MarkReader application chrome.
  *
- *  Loaded after markdown.css so it can override it. The document itself stays in <body> —
- *  which keeps VS Code's `html, body` typography and padding rules meaningful — while the
- *  toolbar, sidebar and outline are position:fixed so they sit outside that flow.
+ *  Loaded after markdown.css so it can override it. Everything is position:fixed, so the window
+ *  itself never scrolls: the document scrolls inside `#viewer`, which sits below the toolbar
+ *  and between the panes. VS Code's `html, body` typography still reaches the document by
+ *  inheritance; its padding no longer does, so `#viewer` restates it — see there.
  *--------------------------------------------------------------------------------------------*/
 
 :root {
@@ -15,25 +16,18 @@
 	--mr-outline-width: 240px;
 }
 
-html {
+html,
+body {
 	height: 100%;
+	overflow: hidden;
 }
 
 body {
 	margin: 0;
-	min-height: 100%;
-	/* markdown.css sets `padding: 0 26px` then `padding-top: 1em`; make room for the toolbar. */
-	padding-top: calc(var(--mr-toolbar-height) + 1em);
-	transition: margin 0.12s ease;
+	box-sizing: border-box;
+	/* markdown.css's `padding-top: 1em` moved to #viewer with the document. */
+	padding-top: 0;
 	-webkit-font-smoothing: antialiased;
-}
-
-body.has-sidebar {
-	margin-left: var(--mr-sidebar-width);
-}
-
-body.has-outline {
-	margin-right: var(--mr-outline-width);
 }
 
 /* ------------------------------------------------------------------------ toolbar */
@@ -284,6 +278,41 @@ body.has-outline #outline {
 
 /* ------------------------------------------------------------------- document */
 
+#viewer {
+	position: fixed;
+	top: var(--mr-toolbar-height);
+	bottom: 0;
+	left: 0;
+	right: 0;
+	overflow: auto;
+	box-sizing: border-box;
+	/* What the document was inset by when it was in the window's flow: markdown.css pads both
+	   `html` and `body` by `0 26px`, and `body` by `1em` at the top. */
+	padding: 1em 52px 0;
+	transition: left 0.12s ease, right 0.12s ease;
+}
+
+/* Focused only so keyboard scrolling lands here; it is not a control. */
+#viewer:focus {
+	outline: none;
+}
+
+body.has-sidebar #viewer {
+	left: var(--mr-sidebar-width);
+}
+
+body.has-outline #viewer {
+	right: var(--mr-outline-width);
+}
+
+/* document-overrides.css narrows the html/body padding to 16px on a phone; follow it. */
+@media (max-width: 600px) {
+	#viewer {
+		padding-left: 32px;
+		padding-right: 32px;
+	}
+}
+
 #content {
 	max-width: 980px;
 	margin: 0 auto;
@@ -361,7 +390,8 @@ body.drag-over::after {
 #find-bar {
 	position: fixed;
 	top: calc(var(--mr-toolbar-height) + 8px);
-	right: 18px;
+	/* Clear of #viewer's scrollbar (14px, theme.css), which the window's used to sit beyond. */
+	right: calc(14px + 18px);
 	z-index: 30;
 	display: none;
 	align-items: center;
@@ -375,7 +405,7 @@ body.drag-over::after {
 }
 
 body.has-outline #find-bar {
-	right: calc(var(--mr-outline-width) + 18px);
+	right: calc(var(--mr-outline-width) + 14px + 18px);
 }
 
 body.finding #find-bar {
@@ -418,8 +448,17 @@ body.finding #find-bar {
 		display: none !important;
 	}
 
+	/* Back into the page's flow, or the printout is one screenful of a scroll container.
+	   Unpadded, because in the flow it is inset by html and body as the document was. */
+	html,
 	body {
-		margin: 0 !important;
-		padding-top: 0 !important;
+		height: auto;
+		overflow: visible;
+	}
+
+	#viewer {
+		position: static;
+		overflow: visible;
+		padding: 0;
 	}
 }

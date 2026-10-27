@@ -109,22 +109,28 @@
 		</button>
 	</div>
 
-	<div id="empty-state">
-		<svg width="46" height="46" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"
-			aria-hidden="true">
-			<path d="M3.5 1.5h6L12.5 4.5v10h-9z" />
-			<path d="M9.5 1.5v3h3M5.5 7.5h5M5.5 10h5M5.5 12h3" />
-		</svg>
-		<div class="empty-title">No document open</div>
-		<div>Drop a Markdown file here, or press <kbd>Ctrl</kbd>+<kbd>O</kbd></div>
-		<div class="empty-actions">
-			<button class="mr-button" id="empty-open-file">Open File…</button>
-			<button class="mr-button" id="empty-open-folder">Open Folder…</button>
+	<!-- The document scrolls in here rather than the window, so the chrome around it stays put
+	     without the document having to know how tall the toolbar is. tabindex="-1" makes it
+	     focusable from script but not a Tab stop: keyboard scrolling goes to whatever has
+	     focus, and with the window no longer scrolling, the shell gives it here. -->
+	<div id="viewer" tabindex="-1">
+		<div id="empty-state">
+			<svg width="46" height="46" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"
+				aria-hidden="true">
+				<path d="M3.5 1.5h6L12.5 4.5v10h-9z" />
+				<path d="M9.5 1.5v3h3M5.5 7.5h5M5.5 10h5M5.5 12h3" />
+			</svg>
+			<div class="empty-title">No document open</div>
+			<div>Drop a Markdown file here, or press <kbd>Ctrl</kbd>+<kbd>O</kbd></div>
+			<div class="empty-actions">
+				<button class="mr-button" id="empty-open-file">Open File…</button>
+				<button class="mr-button" id="empty-open-folder">Open Folder…</button>
+			</div>
 		</div>
-	</div>
 
-	<div id="content">
-		<div class="markdown-body" dir="auto" id="markdown-body"></div>
+		<div id="content">
+			<div class="markdown-body" dir="auto" id="markdown-body"></div>
+		</div>
 	</div>
 
 	<!-- ESM, so the mermaid chunk can be dynamically imported only when a document needs it. -->

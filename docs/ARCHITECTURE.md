@@ -11,9 +11,10 @@ src-tauri/               the backend (Rust)
   src/
     main.rs              window, app wiring, single instance, external links
     commands.rs          the commands the frontend calls (dialogs, open, reveal, theme)
-    document.rs          reading a document, pushing it to the frontend, folder scans
+    document.rs          reading a document, pushing it to the frontend, a window's open set
+                         (`sync_documents`), folder scans
     protocol.rs          the mdr:// scheme, served from disk
-    watcher.rs           watches the document's directory for saves (notify)
+    watcher.rs           watches a window's open documents for saves, one watch per directory
     tree.rs              collects markdown files for the sidebar
     menu.rs              application menu; view state lives in the renderer
     settings.rs          settings.json: read at start-up, written on every change
@@ -42,6 +43,7 @@ src/
     lazy.ts              what a document needs (KaTeX, highlight.js) and loading only that
     config.ts            replaces MarkdownPreviewConfiguration
     paths.ts             browser-safe path helpers
+    scroll.ts            what a DocumentView scrolls: the window, or the element a host gives it
     util.ts              mdr:// URI helpers
     markdown-language-features/util/dom.ts  ← dom.ts, verbatim: the escaping helpers
     vscode.ts            the `vscode` module, as far as the verbatim files use it
@@ -119,8 +121,12 @@ WebView2 supports no non-standard schemes, so on Windows the runtime maps
 `asLocalResourceUri()` in `util.ts` emits whichever form the platform needs, and the Rust
 handler accepts both. This is also why the page's CSP lists `http://mdr.localhost`.
 
-The handler serves only from `ResourceRoots`: the directory of the open document, and the
-opened folder when there is one. Both are canonicalized, so neither a `..` segment nor a
+The handler serves only from `ResourceRoots`: the directory of the window's *active*
+document, and the opened folder when there is one. Roots are kept per window and looked up by
+the label of the webview making the request, so one window's documents cannot read beside
+another's, and an unknown webview gets nothing. The renderer reports which documents are open
+and which is active with `sync_documents`; a document open but not showing is watched for saves
+but is not a root. Both are canonicalized, so neither a `..` segment nor a
 symlink reaches outside them, and anything else gets a 404 — the same answer as a file that
 does not exist, so a document cannot probe for what is there.
 

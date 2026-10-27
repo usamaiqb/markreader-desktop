@@ -19,6 +19,7 @@ const api = window.markreader;
 const view = new DocumentView({
 	root: document.getElementById('markdown-body')!,
 	host: api,
+	scroller: document.getElementById('viewer')!,
 });
 
 startDesktopShell({ view, api });

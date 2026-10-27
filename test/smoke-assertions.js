@@ -144,7 +144,8 @@
 		const mermaid = {
 			rendered: document.querySelectorAll('.mermaid-block.rendered > svg').length,
 			failed: document.querySelectorAll('.mermaid-block.failed').length,
-			strayErrorSvgs: document.querySelectorAll('body > svg[id^="mr-mermaid-"]').length,
+			// Mermaid's scratch element is `div#d<id>` wrapping `svg#<id>`, so match either.
+			strayErrorSvgs: document.querySelectorAll('body > [id*="mr-mermaid-"]').length,
 		};
 		check('two valid diagrams rendered to SVG', mermaid.rendered === 2, JSON.stringify(mermaid));
 		check('broken diagram degrades to error state', mermaid.failed === 1, JSON.stringify(mermaid));
@@ -160,21 +161,38 @@
 		check('diagrams use the VS Code mermaid theme', nodeFill() === expectedFill, nodeFill());
 
 		log('');
+		log('--- scroll container ---');
+		// The document scrolls inside #viewer, not the window. If the window could scroll, the
+		// toolbar would no longer be what stays put, and every check below that drives #viewer
+		// would be watching the wrong scroller.
+		const viewer = document.getElementById('viewer');
+		check('the document scrolls in its own container',
+			viewer.scrollHeight > viewer.clientHeight
+				&& document.documentElement.scrollHeight <= document.documentElement.clientHeight,
+			JSON.stringify({
+				viewer: [viewer.scrollHeight, viewer.clientHeight],
+				page: [document.documentElement.scrollHeight, document.documentElement.clientHeight],
+			}));
+		check('the scroll container has focus, so keys scroll the document',
+			viewer.contains(document.activeElement),
+			document.activeElement ? document.activeElement.tagName + '#' + document.activeElement.id : 'none');
+
+		log('');
 		log('--- outline navigation ---');
-		const scrollBeforeNav = window.scrollY;
+		const scrollBeforeNav = viewer.scrollTop;
 		// The reveal is a smooth scroll, and under xvfb WebKitGTK sometimes never ticks the
-		// animation at all — scrollY stays put however long we wait. So check what the app
-		// controls: that the click asked to scroll down the page.
-		const nativeScrollTo = window.scrollTo;
+		// animation at all — scrollTop stays put however long we wait. So check what the app
+		// controls: that the click asked to scroll down the document. Patched on the element,
+		// shadowing Element.prototype.scrollTo, and removed again afterwards.
 		let requestedTop = null;
-		window.scrollTo = function (options) {
+		viewer.scrollTo = function (options) {
 			requestedTop = typeof options === 'object' ? options.top : arguments[1];
-			return nativeScrollTo.apply(this, arguments);
+			return Element.prototype.scrollTo.apply(this, arguments);
 		};
 		try {
 			document.querySelectorAll('#toc-list .toc-entry')[8]?.click();
 		} finally {
-			window.scrollTo = nativeScrollTo;
+			delete viewer.scrollTo;
 		}
 		check('clicking an outline entry scrolls the document',
 			requestedTop !== null && requestedTop > scrollBeforeNav,
@@ -184,8 +202,8 @@
 		// the later checks (scroll spy, scroll held across live reload) see a scrolled page
 		// rather than passing trivially at the top.
 		if (requestedTop !== null) {
-			await waitFor('outline scroll to land', () => Math.abs(window.scrollY - requestedTop) < 2, 3000)
-				.catch(() => nativeScrollTo.call(window, { top: requestedTop, behavior: 'instant' }));
+			await waitFor('outline scroll to land', () => Math.abs(viewer.scrollTop - requestedTop) < 2, 3000)
+				.catch(() => viewer.scrollTo({ top: requestedTop, behavior: 'instant' }));
 		}
 
 		const activeToc = document.querySelectorAll('#toc-list .toc-entry.active').length;
@@ -257,7 +275,7 @@
 		check('current match highlighted separately', find.hasCurrent);
 
 		document.getElementById('find-close').click();
-		window.scrollTo({ top: 0 });
+		viewer.scrollTo({ top: 0 });
 
 		log('');
 		log('--- theme switch ---');
@@ -333,9 +351,9 @@
 		log('--- live reload ---');
 		// Appending to the open document has to come back as `document:changed` through the
 		// file watcher, with the scroll position held.
-		window.scrollTo({ top: 900 });
+		viewer.scrollTo({ top: 900 });
 		await sleep(250);
-		const scrollBefore = window.scrollY;
+		const scrollBefore = viewer.scrollTop;
 		const marker = `Live reload check ${Date.now()}`;
 		const appended = await invoke('smoke_append', {
 			path: smoke.file,
@@ -348,8 +366,8 @@
 				.some(h => (h.textContent || '').includes(marker)), 20000).catch(() => false);
 		check('live reload picks up a save', reloaded === true);
 		check('scroll position held across live reload',
-			Math.abs(window.scrollY - scrollBefore) <= 2,
-			`${scrollBefore} -> ${window.scrollY}`);
+			Math.abs(viewer.scrollTop - scrollBefore) <= 2,
+			`${scrollBefore} -> ${viewer.scrollTop}`);
 		check('outline rebuilt after live reload',
 			Array.from(document.querySelectorAll('#toc-list .toc-entry'))
 				.some(e => (e.textContent || '').includes(marker)));

@@ -115,8 +115,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 /// listens to; the rest is window work the backend has to do itself.
 pub fn handle_event(app: &AppHandle, id: &str) {
 	match id {
-		"open_file" => commands::open_file_dialog(app.clone()),
-		"open_folder" => commands::open_folder_dialog(app.clone()),
+		"open_file" => commands::pick_file(app, WINDOW_LABEL),
+		"open_folder" => commands::pick_folder(app, WINDOW_LABEL),
 		"reload" => emit(app, "command:reloadDocument", ()),
 		"find" => emit(app, "command:find", ()),
 		"toggle_sidebar" => emit(app, "command:toggleSidebar", ()),

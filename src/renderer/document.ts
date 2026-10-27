@@ -29,6 +29,7 @@ import { VsCodeMermaidThemeTracker, vsCodeMermaidTheme } from './mermaid/vsCodeT
 import { isMarkdownPath, samePath } from './paths';
 import { getPlugins } from './plugins';
 import { setDocumentHtml } from './sanitizer';
+import { scrollAreaOf, type ScrollArea } from './scroll';
 
 export type { HeadingInfo, MarkDocument };
 
@@ -68,13 +69,37 @@ export interface DocumentViewOptions {
 	/** The element rendered markdown goes into — the one `markdown.css` styles. */
 	readonly root: HTMLElement;
 	readonly host: DocumentHost;
+	/**
+	 * The element the document scrolls inside, if not the window. It is the host's, not the
+	 * document's: the view scrolls it and listens to it, and touches nothing else about it.
+	 */
+	readonly scroller?: HTMLElement;
 }
 
-/** Distance from the top of the viewport at which a heading counts as "current". */
-const READING_LINE = 90;
+/**
+ * Where the reader was in a document, enough to put them back there. Opaque to callers: hold
+ * it, hand it back to `setDocument`, and do not read it — what it records may grow.
+ */
+export interface DocumentViewState {
+	readonly scrollTop: number;
+}
+
+export interface SetDocumentOptions {
+	/** Live reload: if this is the document already showing, hold the scroll position. */
+	readonly preserveScroll: boolean;
+	/** Restore this instead of the remembered position. A link's fragment still wins. */
+	readonly viewState?: DocumentViewState;
+}
+
+/**
+ * Distance from the top of the scroll area at which a heading counts as "current". Both of these
+ * are measured from the visible top of the document: they were 90 and 56 when the window scrolled
+ * and the desktop's 38px toolbar overlapped the page, and are restated net of it.
+ */
+const READING_LINE = 52;
 
 /** Headroom left above a revealed target, so it isn't flush against the top edge. */
-const REVEAL_OFFSET = 56;
+const REVEAL_OFFSET = 18;
 
 const NO_MATCHES: FindState = { query: '', index: -1, total: 0 };
 
@@ -90,6 +115,7 @@ const MERMAID_THEME_CONFIG = {
 export class DocumentView {
 	private readonly root: HTMLElement;
 	private readonly host: DocumentHost;
+	private readonly scroll: ScrollArea;
 
 	/**
 	 * The element carrying `vscode-dark` / `vscode-light` and `wordWrap`. This is the one
@@ -135,11 +161,12 @@ export class DocumentView {
 	constructor(options: DocumentViewOptions) {
 		this.root = options.root;
 		this.host = options.host;
+		this.scroll = scrollAreaOf(options.scroller);
 		this.themeRoot = options.root.ownerDocument.body;
 
 		this.root.addEventListener('click', event => this.onLinkClick(event));
 
-		window.addEventListener('scroll', () => this.onScroll(), { passive: true });
+		this.scroll.onScroll(() => this.onScroll());
 
 		this.systemDark.addEventListener('change', () => {
 			if (getConfig().theme === 'system') {
@@ -176,6 +203,11 @@ export class DocumentView {
 		return this.headings;
 	}
 
+	/** Where the reader is in the showing document; see `SetDocumentOptions.viewState`. */
+	getViewState(): DocumentViewState {
+		return { scrollTop: this.scroll.scrollTop };
+	}
+
 	/** The folder a document was opened from, used to resolve root-relative links. */
 	setRootPath(rootPath: string | undefined): void {
 		this.root_ = rootPath;
@@ -183,7 +215,7 @@ export class DocumentView {
 
 	// ---------------------------------------------------------------- document flow
 
-	setDocument(doc: MarkDocument, options: { preserveScroll: boolean }): void {
+	setDocument(doc: MarkDocument, options: SetDocumentOptions): void {
 		void this.setDocumentAsync(doc, options);
 	}
 
@@ -196,7 +228,7 @@ export class DocumentView {
 	 * otherwise race through the await below and paint in whichever order their modules
 	 * happened to resolve.
 	 */
-	private async setDocumentAsync(doc: MarkDocument, options: { preserveScroll: boolean }): Promise<void> {
+	private async setDocumentAsync(doc: MarkDocument, options: SetDocumentOptions): Promise<void> {
 		const seq = ++this.documentSeq;
 		const prepared = await prepareForDocument(doc.text);
 		if (seq !== this.documentSeq) {
@@ -206,7 +238,7 @@ export class DocumentView {
 			this.engine = new MarkdownItEngine(getPlugins());
 		}
 
-		const previousScroll = window.scrollY;
+		const previousScroll = this.scroll.scrollTop;
 		const isSameDoc = this.doc !== undefined && samePath(this.doc.path, doc.path);
 
 		if (this.doc && !isSameDoc) {
@@ -224,13 +256,16 @@ export class DocumentView {
 			return;
 		}
 
-		if (options.preserveScroll && isSameDoc) {
+		let top: number;
+		if (options.viewState) {
+			top = options.viewState.scrollTop;
+		} else if (options.preserveScroll && isSameDoc) {
 			// Live reload: hold position so saving doesn't yank the reader to the top.
-			requestAnimationFrame(() => window.scrollTo({ top: previousScroll }));
+			top = previousScroll;
 		} else {
-			const remembered = this.scrollMemory.get(doc.path) ?? 0;
-			requestAnimationFrame(() => window.scrollTo({ top: remembered }));
+			top = this.scrollMemory.get(doc.path) ?? 0;
 		}
+		requestAnimationFrame(() => this.scroll.scrollTo(top));
 	}
 
 	/** Re-read the showing document from the host and re-render it in place. */
@@ -396,6 +431,11 @@ export class DocumentView {
 			startOnLoad: false,
 			...this.mermaidTheme.resolveMermaidTheme(MERMAID_THEME_CONFIG),
 			securityLevel: 'strict',
+			// Without this, a diagram that fails to parse leaves mermaid's "Syntax error in text"
+			// graphic behind in a `div#d<id>` on the body: it throws before removing its own
+			// scratch element. Suppressed, it removes it and just throws, and the catch below
+			// shows the source and the reason instead.
+			suppressErrorRendering: true,
 		});
 
 		// Guards against a second render (theme switch, live reload) interleaving with this one.
@@ -436,8 +476,6 @@ export class DocumentView {
 					message.textContent = `Mermaid diagram failed to render: ${(e as Error).message ?? e}`;
 					block.insertBefore(message, block.firstChild);
 				}
-				// Mermaid appends its own error graphic to the body on failure.
-				document.querySelectorAll('body > svg[id^="mr-mermaid-"]').forEach(n => n.remove());
 			}
 		}
 	}
@@ -458,11 +496,11 @@ export class DocumentView {
 		// The active heading is the last one whose top edge is above the reading line.
 		let active: string | undefined;
 		for (const heading of this.headings) {
-			const node = document.getElementById(heading.slug);
+			const node = this.elementById(heading.slug);
 			if (!node) {
 				continue;
 			}
-			if (node.getBoundingClientRect().top <= READING_LINE) {
+			if (this.scroll.fromTop(node.getBoundingClientRect().top) <= READING_LINE) {
 				active = heading.slug;
 			} else {
 				break;
@@ -477,19 +515,28 @@ export class DocumentView {
 	}
 
 	revealSlug(slug: string): void {
-		const target = document.getElementById(slug)
+		const target = this.elementById(slug)
 			// Fall back to a fragment-style match, as VS Code's link handling does.
-			?? document.getElementById(decodeURIComponent(slug));
+			?? this.elementById(decodeURIComponent(slug));
 		if (!target) {
 			return;
 		}
-		const top = target.getBoundingClientRect().top + window.scrollY - REVEAL_OFFSET;
-		window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+		const top = this.scroll.scrollTop + this.scroll.fromTop(target.getBoundingClientRect().top) - REVEAL_OFFSET;
+		this.scroll.scrollTo(Math.max(0, top), 'smooth');
 
 		target.classList.remove('mr-target-flash');
 		// Force a reflow so the animation replays when the same target is picked twice.
 		void target.offsetWidth;
 		target.classList.add('mr-target-flash');
+	}
+
+	/**
+	 * `document.getElementById`, scoped to the root: an id elsewhere on the page — the shell's,
+	 * or another view's — is not this document's. Escaped, because slugs are routinely not
+	 * valid selectors as written (`1-introduction`).
+	 */
+	private elementById(id: string): HTMLElement | null {
+		return id ? this.root.querySelector<HTMLElement>(`#${CSS.escape(id)}`) : null;
 	}
 
 	// ------------------------------------------------------------------------ theming
@@ -629,8 +676,8 @@ export class DocumentView {
 			return;
 		}
 		const rect = range.getBoundingClientRect();
-		const top = rect.top + window.scrollY - window.innerHeight / 2;
-		window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+		const top = this.scroll.scrollTop + this.scroll.fromTop(rect.top) - this.scroll.height / 2;
+		this.scroll.scrollTo(Math.max(0, top), 'smooth');
 	}
 
 	// ------------------------------------------------------------------- link handling

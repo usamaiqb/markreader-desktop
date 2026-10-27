@@ -93,6 +93,9 @@ const api: MarkReaderApi = {
 	 */
 	pathForFile: (_file: File): string | undefined => undefined,
 
+	syncDocuments: (open: readonly string[], active: string | undefined): Promise<void> =>
+		invoke('sync_documents', { open, active: active ?? null }),
+
 	onDocumentOpened: (h: (doc: MarkDocument) => void) => subscribe('document:opened', h),
 	onDocumentChanged: (h: (doc: MarkDocument) => void) => subscribe('document:changed', h),
 	onFolderOpened: (h: (payload: FolderPayload) => void) => subscribe('folder:opened', h),
