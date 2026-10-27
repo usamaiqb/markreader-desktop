@@ -346,24 +346,26 @@ export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 	/**
 	 * Keeps the showing tab's view state current as the reader scrolls, so whatever happens to
 	 * it next — another tab activated, it closed and reopened — it has where it was left. The
-	 * path check skips the gap while the view is still painting the previous document.
+	 * path check skips the gap while the view is still showing the previous document.
 	 */
-	let viewStateRaf = 0;
-	el.viewer.addEventListener('scroll', () => {
-		if (viewStateRaf) {
-			return;
+	function recordShownViewState(): void {
+		const tab = shownTabId === undefined ? undefined : tabs.get(shownTabId);
+		const current = view.currentDocument;
+		if (tab && current && samePath(tab.path, current.path)) {
+			tabs.setViewState(tab.id, view.getViewState());
 		}
-		viewStateRaf = requestAnimationFrame(() => {
-			viewStateRaf = 0;
-			const tab = shownTabId === undefined ? undefined : tabs.get(shownTabId);
-			const current = view.currentDocument;
-			if (tab && current && samePath(tab.path, current.path)) {
-				tabs.setViewState(tab.id, view.getViewState());
-			}
-		});
-	}, { passive: true });
+	}
+
+	// Synchronously, not on the next animation frame: storing it is cheap, and a frame is not
+	// guaranteed to come in time — WebKitGTK throttles them in a window it thinks is hidden,
+	// so a deferred record could miss the switch it was needed for.
+	el.viewer.addEventListener('scroll', () => recordShownViewState(), { passive: true });
 
 	tabs.onChange(change => {
+		// The tab being left, before anything changes what the view shows.
+		if (change.activeChanged) {
+			recordShownViewState();
+		}
 		el.body.classList.toggle('has-tabs', tabs.tabs.length > 0);
 		strip.render();
 		// The model keeps no text, so text for a tab that has gone is dropped here.
