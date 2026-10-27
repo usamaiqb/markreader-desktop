@@ -90,6 +90,16 @@ pub fn read_document(app: AppHandle, path: String) -> Option<MarkDocument> {
 	document::read_or_report(&app, &document::resolve(Path::new(&path)))
 }
 
+/// A document the renderer opened itself — from the file list or a link — rather than through
+/// `open_document`, which notes it on the way. Ignored unless it is a file on disk.
+#[tauri::command]
+pub fn note_recent_document(app: AppHandle, path: String) {
+	let path = document::resolve(Path::new(&path));
+	if path.is_absolute() && path.is_file() {
+		document::note_recent(&app, &path);
+	}
+}
+
 /// The only schemes a document may ask the OS to open.
 ///
 /// This is the last line rather than the first — the renderer checks the scheme before it

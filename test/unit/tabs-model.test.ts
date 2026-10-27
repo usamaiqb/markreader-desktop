@@ -176,6 +176,14 @@ describe('reopening closed tabs', () => {
 		expect(paths(model)).toEqual(['/a.md', '/b.md', '/c.md']);
 	});
 
+	it('a discarded tab is not offered back, and does not hide the ones behind it', () => {
+		const model = withTabs('/a.md', '/gone.md');
+		model.close(model.find('/a.md')!.id);
+		model.discard(model.find('/gone.md')!.id);
+		expect(model.reopenClosed()?.path).toBe('/a.md');
+		expect(model.canReopenClosed).toBe(false);
+	});
+
 	it('skips a file that has been opened again since', () => {
 		const model = withTabs('/a.md', '/b.md');
 		model.close(model.find('/a.md')!.id);

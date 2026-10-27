@@ -29,7 +29,15 @@ async function prepareSample() {
 	await fs.rm(tmp, { recursive: true, force: true });
 	await fs.mkdir(tmp, { recursive: true });
 	await fs.cp(path.join(root, 'samples'), path.join(tmp, 'samples'), { recursive: true });
-	return path.join(tmp, 'samples', 'kitchen-sink.md');
+
+	// The tab checks need documents to link between, outside the sample's folder rather than
+	// inside it: the sample's folder is a resource root while it is active, so an image in a
+	// subfolder of it would load whether or not the roots follow the active tab. The link that
+	// reaches them is added to the copy, so the sample itself stays a plain showcase.
+	await fs.cp(path.join(root, 'test', 'fixtures'), path.join(tmp, 'fixtures'), { recursive: true });
+	const sample = path.join(tmp, 'samples', 'kitchen-sink.md');
+	await fs.appendFile(sample, '\n\nSee also the [tabs fixture](../fixtures/tabs/a.md).\n');
+	return sample;
 }
 
 async function main() {

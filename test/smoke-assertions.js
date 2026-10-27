@@ -318,6 +318,193 @@
 		check('outline still on', document.body.classList.contains('has-outline'));
 
 		log('');
+		log('--- tabs ---');
+		// Before the folder is opened on purpose: once it is, the whole repository is a resource
+		// root, and an image beside another tab's document would load whether or not the roots
+		// follow the active tab. The fixture documents live in test/tmp/fixtures, outside the sample's
+		// folder rather than in it; smoke.mjs links the sample copy to them.
+		const tabEls = () => Array.from(document.querySelectorAll('#tab-strip .tab'));
+		const activeTab = () => document.querySelector('#tab-strip .tab.active');
+		/** A tab's path is the first line of its tooltip; a preview tab adds a second. */
+		const tabPath = tab => (tab?.title ?? '').split('\n')[0].replace(/\\/g, '/');
+		const tabFor = suffix => tabEls().find(tab => tabPath(tab).endsWith('/' + suffix));
+		const activeIs = suffix => tabPath(activeTab()).endsWith('/' + suffix);
+		const tabState = () => JSON.stringify({
+			tabs: tabEls().map(tab => tabPath(tab).split('/').pop() + (tab.classList.contains('preview') ? '*' : '')),
+			active: tabPath(activeTab()).split('/').pop() ?? null,
+			title: document.title,
+		});
+		const h1Text = () => document.querySelector('#markdown-body h1')?.textContent ?? '';
+		/** The view has painted `suffix` — the shell's title and the document body both. */
+		const showing = (suffix, heading) => activeIs(suffix)
+			&& document.title.startsWith(suffix.split('/').pop() + ' ')
+			&& (heading === undefined || h1Text().includes(heading));
+		const kitchenShowing = () => showing('samples/kitchen-sink.md')
+			&& !!document.querySelector('#markdown-body .mermaid-block');
+		const docLink = suffix => Array.from(document.querySelectorAll('#markdown-body a'))
+			.find(a => (a.getAttribute('data-href') ?? a.getAttribute('href') ?? '').endsWith(suffix));
+		const mouse = (target, type, init = {}) => target.dispatchEvent(new MouseEvent(type, {
+			bubbles: true, cancelable: true, view: window, ...init,
+		}));
+		const key = (keyName, init = {}) => (document.activeElement ?? document.body).dispatchEvent(
+			new KeyboardEvent('keydown', { key: keyName, bubbles: true, cancelable: true, ctrlKey: true, ...init }));
+		/** What the menu does for an accelerator: the same event, from the page instead of Rust. */
+		const emitCommand = channel => invoke('plugin:event|emit', { event: channel, payload: null });
+
+		const strip = document.getElementById('tab-strip');
+		const startTabs = tabEls();
+		check('the start-up document has exactly one tab', startTabs.length === 1, tabState());
+		check('the start-up tab is active', startTabs[0]?.classList.contains('active') === true, tabState());
+		check('the start-up tab is pinned, not a preview',
+			startTabs[0] && !startTabs[0].classList.contains('preview'), tabState());
+		check('the tab strip shows', getComputedStyle(strip).display !== 'none' && strip.offsetHeight > 0,
+			`display ${getComputedStyle(strip).display}, height ${strip.offsetHeight}`);
+
+		// Leave the sample somewhere other than the top, to see it come back there.
+		viewer.scrollTo({ top: 1200, behavior: 'instant' });
+		await sleep(300);
+		const kitchenTop = viewer.scrollTop;
+
+		const toA = docLink('tabs/a.md');
+		toA?.click();
+		await waitFor('a.md to show', () => showing('tabs/a.md', 'Tabs fixture A'))
+			.catch(() => null);
+		check('a plain click on a document link shows its target',
+			!!toA && showing('tabs/a.md', 'Tabs fixture A'), tabState());
+		check('... in a new preview tab beside the pinned one',
+			tabEls().length === 2 && activeTab()?.classList.contains('preview') === true, tabState());
+
+		// Roots follow the active tab: a.md is outside the sample's folder, and no folder is
+		// open, so its image is reachable only if the host was switched to it before the paint.
+		const pixel = await waitFor('pixel.svg to load', () => {
+			const img = Array.from(document.querySelectorAll('#markdown-body img'))
+				.find(i => i.getAttribute('data-src')?.includes('pixel.svg'));
+			return img && img.complete && img.naturalWidth > 0 ? { w: img.naturalWidth, src: img.src } : null;
+		}, 8000).catch(() => null);
+		check('an image beside the active tab\'s document loads over mdr://', pixel && pixel.w > 0,
+			JSON.stringify(pixel));
+		// And the roots really are scoped, or the check above proves nothing: a file that exists,
+		// one folder over from a.md and outside the sample's folder too, must not be served.
+		const outside = await waitFor('outside.svg to settle', () => {
+			const img = Array.from(document.querySelectorAll('#markdown-body img'))
+				.find(i => i.getAttribute('data-src')?.includes('outside.svg'));
+			return img && img.complete ? { w: img.naturalWidth } : null;
+		}, 8000).catch(() => null);
+		check('an image outside the active tab\'s roots is refused', !!outside && outside.w === 0,
+			JSON.stringify(outside));
+
+		const toB = docLink('b.md');
+		if (toB) {
+			mouse(toB, 'click', { ctrlKey: true });
+		}
+		await waitFor('b.md tab', () => tabFor('tabs/b.md')).catch(() => null);
+		check('Ctrl+click on a document link opens a tab', tabEls().length === 3 && !!tabFor('tabs/b.md'), tabState());
+		check('... in the background, leaving the active tab showing',
+			showing('tabs/a.md', 'Tabs fixture A'), tabState());
+		check('... pinned, so the next preview does not replace it',
+			tabFor('tabs/b.md') && !tabFor('tabs/b.md').classList.contains('preview'), tabState());
+
+		const toC = docLink('c.md');
+		if (toC) {
+			mouse(toC, 'auxclick', { button: 1 });
+		}
+		await waitFor('c.md tab', () => tabFor('tabs/c.md')).catch(() => null);
+		check('middle-click on a document link opens a background tab too',
+			tabEls().length === 4 && !!tabFor('tabs/c.md') && showing('tabs/a.md', 'Tabs fixture A'), tabState());
+
+		// Each tab keeps its own scroll position.
+		check('the fixture document is long enough to scroll', viewer.scrollHeight > viewer.clientHeight + 500,
+			`${viewer.scrollHeight} / ${viewer.clientHeight}`);
+		viewer.scrollTo({ top: 400, behavior: 'instant' });
+		await sleep(300);
+		const aTop = viewer.scrollTop;
+
+		tabFor('samples/kitchen-sink.md')?.click();
+		const kitchenBack = await waitFor('sample scroll to be restored',
+			() => kitchenShowing() && Math.abs(viewer.scrollTop - kitchenTop) <= 2, 8000)
+			.then(() => true, () => false);
+		check('switching back to a tab restores its scroll position', kitchenBack,
+			`left at ${kitchenTop}, back at ${viewer.scrollTop}; ${tabState()}`);
+
+		tabFor('tabs/a.md')?.click();
+		const aBack = await waitFor('a.md scroll to be restored',
+			() => showing('tabs/a.md', 'Tabs fixture A') && Math.abs(viewer.scrollTop - aTop) <= 2, 8000)
+			.then(() => true, () => false);
+		check('... and every tab its own', aBack && aTop > 0,
+			`left at ${aTop}, back at ${viewer.scrollTop}; ${tabState()}`);
+
+		// Keyboard. The order is the sample, a, then each background tab opened right of a.
+		const order = tabEls().map(tabPath);
+		const indexOf = suffix => order.findIndex(p => p.endsWith('/' + suffix));
+		key('PageDown');
+		await waitFor('Ctrl+PgDn', () => activeTab() === tabEls()[indexOf('tabs/a.md') + 1], 3000).catch(() => null);
+		check('Ctrl+PgDn activates the next tab', activeTab() === tabEls()[indexOf('tabs/a.md') + 1], tabState());
+		const afterPgDn = tabPath(activeTab());
+
+		key('Tab');
+		(document.activeElement ?? document.body).dispatchEvent(
+			new KeyboardEvent('keyup', { key: 'Control', bubbles: true }));
+		await waitFor('Ctrl+Tab', () => activeIs('tabs/a.md'), 3000).catch(() => null);
+		check('Ctrl+Tab goes back to the tab used before', activeIs('tabs/a.md'),
+			`from ${afterPgDn}; ${tabState()}`);
+
+		key('1', { code: 'Digit1' });
+		await waitFor('Ctrl+1', () => kitchenShowing(), 8000).catch(() => null);
+		check('Ctrl+1 activates the first tab', activeTab() === tabEls()[0] && kitchenShowing(), tabState());
+
+		// Close falls back along recent use, not to a neighbour: activate c.md from the sample,
+		// so closing it should land on the sample though a.md and b.md are beside it.
+		key(String(indexOf('tabs/c.md') + 1));
+		await waitFor('c.md to show', () => showing('tabs/c.md', 'Tabs fixture C'), 8000).catch(() => null);
+		const closeC = tabFor('tabs/c.md')?.querySelector('.tab-close');
+		closeC?.click();
+		await waitFor('c.md to close', () => !tabFor('tabs/c.md') && kitchenShowing(), 8000).catch(() => null);
+		check('the close button closes its tab', !!closeC && !tabFor('tabs/c.md') && tabEls().length === 3, tabState());
+		check('... and the tab used before it shows, not its neighbour', kitchenShowing(), tabState());
+
+		const bTab = tabFor('tabs/b.md');
+		if (bTab) {
+			mouse(bTab, 'auxclick', { button: 1 });
+		}
+		await waitFor('b.md to close', () => !tabFor('tabs/b.md'), 3000).catch(() => null);
+		check('middle-click on a tab closes it', !!bTab && !tabFor('tabs/b.md') && tabEls().length === 2, tabState());
+		check('... and closing a background tab leaves the active one', kitchenShowing(), tabState());
+
+		await emitCommand('command:reopenClosedTab').catch(error => log(`        (emit failed: ${error})`));
+		await waitFor('b.md to reopen', () => showing('tabs/b.md', 'Tabs fixture B'), 8000).catch(() => null);
+		check('Reopen Closed Tab brings back the last tab closed', !!tabFor('tabs/b.md') && tabEls().length === 3
+			&& showing('tabs/b.md', 'Tabs fixture B'), tabState());
+
+		// Close everything, the sample last, so that reopening brings it back for the sections
+		// after this one.
+		for (const suffix of ['tabs/b.md', 'tabs/a.md', 'samples/kitchen-sink.md']) {
+			tabFor(suffix)?.querySelector('.tab-close')?.click();
+			await waitFor(`${suffix} to close`, () => !tabFor(suffix), 3000).catch(() => null);
+		}
+		await waitFor('the empty state', () => document.body.classList.contains('no-document'), 5000)
+			.catch(() => null);
+		check('closing every tab leaves none', tabEls().length === 0, tabState());
+		check('... and shows the empty state', document.body.classList.contains('no-document')
+			&& !document.querySelector('#markdown-body h1'), document.body.className);
+		check('... and hides the tab strip', getComputedStyle(strip).display === 'none',
+			getComputedStyle(strip).display);
+		check('... and the title names no document', document.title === 'MarkReader'
+			&& document.getElementById('doc-title').textContent === 'No document',
+			`${document.title} / ${document.getElementById('doc-title').textContent}`);
+
+		await emitCommand('command:reopenClosedTab').catch(error => log(`        (emit failed: ${error})`));
+		await waitFor('the sample to reopen', () => kitchenShowing()
+			&& document.querySelectorAll('.mermaid-block.rendered, .mermaid-block.failed').length >= 3, 45000)
+			.catch(() => null);
+		check('Reopen Closed Tab brings a document back from the empty state',
+			kitchenShowing() && tabEls().length === 1 && !document.body.classList.contains('no-document'), tabState());
+		check('... and the sample\'s images load again', await waitFor('badge.svg after reopen', () => {
+			const img = Array.from(document.querySelectorAll('#markdown-body img'))
+				.find(i => i.getAttribute('data-src')?.includes('badge.svg'));
+			return img && img.complete && img.naturalWidth > 0;
+		}, 8000).catch(() => false));
+
+		log('');
 		log('--- folder sidebar ---');
 		// Drives the real Rust folder scanner and the real `folder:opened` event the dialog
 		// would emit, just without the dialog.
@@ -346,6 +533,75 @@
 		fileFilter.value = '';
 		fileFilter.dispatchEvent(new Event('input', { bubbles: true }));
 		await sleep(150);
+
+		log('');
+		log('--- tabs from the sidebar ---');
+		/** The sidebar entry for a fixture under test/tmp/fixtures/tabs, re-queried: the list is redrawn. */
+		const fileEntry = name => Array.from(document.querySelectorAll('#file-list .file-entry'))
+			.find(e => (e.title || '').replace(/\\/g, '/').endsWith('test/tmp/fixtures/tabs/' + name));
+
+		const entryB = fileEntry('b.md');
+		entryB?.click();
+		await waitFor('b.md from the sidebar', () => showing('tabs/b.md', 'Tabs fixture B'), 8000).catch(() => null);
+		check('clicking a sidebar file opens it in a preview tab',
+			!!entryB && showing('tabs/b.md', 'Tabs fixture B') && tabEls().length === 2
+				&& activeTab()?.classList.contains('preview') === true, tabState());
+
+		fileEntry('c.md')?.click();
+		await waitFor('c.md from the sidebar', () => showing('tabs/c.md', 'Tabs fixture C'), 8000).catch(() => null);
+		check('clicking another sidebar file replaces the preview tab',
+			showing('tabs/c.md', 'Tabs fixture C') && tabEls().length === 2 && !tabFor('tabs/b.md')
+				&& activeTab()?.classList.contains('preview') === true, tabState());
+
+		const entryC = fileEntry('c.md');
+		if (entryC) {
+			mouse(entryC, 'dblclick');
+		}
+		await waitFor('c.md to be pinned', () => tabFor('tabs/c.md') && !tabFor('tabs/c.md').classList.contains('preview'), 3000)
+			.catch(() => null);
+		check('double-clicking a sidebar file keeps its tab',
+			!!tabFor('tabs/c.md') && !tabFor('tabs/c.md').classList.contains('preview') && tabEls().length === 2,
+			tabState());
+
+		// Live reload of a tab that is not showing: the watcher's event only stores the text, so
+		// listen for it here to know it has arrived before the tab is brought forward — otherwise
+		// a late event would land on the showing tab and pass for the wrong reason.
+		const changed = [];
+		const handlerId = window.__TAURI_INTERNALS__.transformCallback(event => changed.push(event.payload));
+		const eventId = await invoke('plugin:event|listen', {
+			event: 'document:changed',
+			target: { kind: 'Any' },
+			handler: handlerId,
+		}).catch(() => undefined);
+
+		tabFor('samples/kitchen-sink.md')?.click();
+		await waitFor('the sample to show again', () => kitchenShowing(), 8000).catch(() => null);
+		const cPath = tabFor('tabs/c.md')?.title.split('\n')[0];
+		const bgMarker = `Background reload check ${Date.now()}`;
+		const bgAppended = await invoke('smoke_append', { path: cPath, text: '\n\n## ' + bgMarker + '\n' })
+			.then(() => true).catch(error => String(error));
+		const bgEvent = await waitFor('the watcher to report the background save',
+			() => changed.some(doc => (doc?.text ?? '').includes(bgMarker)), 20000).catch(() => false);
+		check('a save to a background tab reaches the window', bgAppended === true && bgEvent === true,
+			`append: ${bgAppended}, events: ${changed.length}`);
+		check('... without disturbing the tab that is showing', kitchenShowing()
+			&& !(document.getElementById('markdown-body').textContent || '').includes(bgMarker), tabState());
+
+		tabFor('tabs/c.md')?.click();
+		const bgShown = await waitFor('the background save to show', () => showing('tabs/c.md', 'Tabs fixture C')
+			&& Array.from(document.querySelectorAll('#markdown-body h2')).some(h => (h.textContent || '').includes(bgMarker)),
+		5000).then(() => true, () => false);
+		check('activating it shows the saved text', bgShown, tabState());
+		if (eventId !== undefined) {
+			await invoke('plugin:event|unlisten', { event: 'document:changed', eventId }).catch(() => undefined);
+		}
+
+		// The live reload section below expects the sample alone, showing, and settled.
+		tabFor('tabs/c.md')?.querySelector('.tab-close')?.click();
+		await waitFor('the sample to settle', () => kitchenShowing() && tabEls().length === 1
+			&& document.querySelectorAll('.mermaid-block.rendered, .mermaid-block.failed').length >= 3, 45000)
+			.catch(() => null);
+		check('closing the last extra tab leaves the sample showing', kitchenShowing() && tabEls().length === 1, tabState());
 
 		log('');
 		log('--- live reload ---');

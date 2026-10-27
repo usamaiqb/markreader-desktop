@@ -12,6 +12,8 @@
 
 :root {
 	--mr-toolbar-height: 38px;
+	/* The tab strip's height while it shows, which is whenever a tab is open. */
+	--mr-tabs-height: 0px;
 	--mr-sidebar-width: 260px;
 	--mr-outline-width: 240px;
 }
@@ -276,11 +278,132 @@ body.has-outline #outline {
 .toc-entry[data-level="5"] { padding-left: 60px; opacity: 0.85; }
 .toc-entry[data-level="6"] { padding-left: 72px; opacity: 0.8; }
 
+/* ------------------------------------------------------------------- tab strip */
+
+/* Where the document column starts: below the toolbar, and the tab strip when it shows. On
+   body rather than :root, so that it is resolved where `has-tabs` changes the strip height. */
+body {
+	--mr-document-top: calc(var(--mr-toolbar-height) + var(--mr-tabs-height));
+}
+
+body.has-tabs {
+	--mr-tabs-height: 35px;
+}
+
+#tab-strip {
+	position: fixed;
+	top: var(--mr-toolbar-height);
+	left: 0;
+	right: 0;
+	z-index: 15;
+	display: none;
+	height: var(--mr-tabs-height);
+	box-sizing: border-box;
+	overflow-x: auto;
+	overflow-y: hidden;
+	background: var(--mr-sidebar-background);
+	border-bottom: 1px solid var(--mr-chrome-border);
+	font-size: 13px;
+	user-select: none;
+	scrollbar-width: thin;
+	transition: left 0.12s ease, right 0.12s ease;
+}
+
+#tab-strip::-webkit-scrollbar {
+	height: 3px;
+}
+
+body.has-tabs #tab-strip {
+	display: flex;
+}
+
+body.has-sidebar #tab-strip {
+	left: var(--mr-sidebar-width);
+}
+
+body.has-outline #tab-strip {
+	right: var(--mr-outline-width);
+}
+
+.tab {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 220px;
+	/* One pixel short of the strip, so the active tab's own background covers its border. */
+	height: calc(var(--mr-tabs-height) - 1px);
+	padding: 0 4px 0 12px;
+	box-sizing: border-box;
+	border-right: 1px solid var(--mr-chrome-border);
+	color: var(--mr-description-foreground);
+	cursor: pointer;
+}
+
+.tab:hover {
+	background: var(--mr-list-hoverBackground);
+}
+
+.tab.active {
+	height: var(--mr-tabs-height);
+	background: var(--vscode-editor-background);
+	color: var(--mr-sidebar-foreground);
+	box-shadow: inset 0 1px 0 var(--mr-focus-border);
+}
+
+/* A preview tab is replaced by the next preview, and says so the way VS Code's does. */
+.tab.preview .tab-label {
+	font-style: italic;
+}
+
+.tab-label {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.tab-dir {
+	margin-left: 6px;
+	font-size: 12px;
+	opacity: 0.7;
+}
+
+.tab-close {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	/* Hidden until wanted, but still laid out, so tabs do not change width on hover. */
+	visibility: hidden;
+}
+
+.tab.active .tab-close,
+.tab:hover .tab-close {
+	visibility: visible;
+}
+
+.tab-close:hover {
+	background: var(--mr-list-hoverBackground);
+}
+
+.tab-close .mr-icon {
+	width: 14px;
+	height: 14px;
+}
+
 /* ------------------------------------------------------------------- document */
 
 #viewer {
 	position: fixed;
-	top: var(--mr-toolbar-height);
+	top: var(--mr-document-top);
 	bottom: 0;
 	left: 0;
 	right: 0;
@@ -389,7 +512,7 @@ body.drag-over::after {
 
 #find-bar {
 	position: fixed;
-	top: calc(var(--mr-toolbar-height) + 8px);
+	top: calc(var(--mr-document-top) + 8px);
 	/* Clear of #viewer's scrollbar (14px, theme.css), which the window's used to sit beyond. */
 	right: calc(14px + 18px);
 	z-index: 30;
@@ -440,6 +563,7 @@ body.finding #find-bar {
 
 @media print {
 	#toolbar,
+	#tab-strip,
 	#sidebar,
 	#outline,
 	#find-bar,

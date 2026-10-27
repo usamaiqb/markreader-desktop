@@ -20,20 +20,34 @@ import {
 	type FrontMatterRenderStyle,
 	type ThemeMode,
 } from './config';
-import type { DocumentView, HeadingInfo } from './document';
-import { capabilitiesOf, type MarkDocument, type MarkReaderApi, type TreeEntry } from './host';
+import type { DocumentView, DocumentViewState, HeadingInfo } from './document';
+import {
+	capabilitiesOf,
+	type MarkDocument,
+	type MarkReaderApi,
+	type OpenPathOptions,
+	type TreeEntry,
+} from './host';
 import { escapeHtml } from './markdown-language-features/util/dom';
 import { basename, dirname, samePath } from './paths';
+import { TabsModel, type OpenOptions } from './tabs/model';
+import { createTabStrip } from './tabs/strip';
 
 export interface ShellOptions {
 	readonly view: DocumentView;
 	readonly api: MarkReaderApi;
 }
 
-export function startDesktopShell({ view, api }: ShellOptions): void {
+/** What the composition root hands the document view, so its links open as tabs. */
+export interface DesktopShell {
+	openPath(filePath: string, options?: OpenPathOptions): Promise<void>;
+}
+
+export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 	const el = {
 		body: document.body,
 		viewer: document.getElementById('viewer')!,
+		tabStrip: document.getElementById('tab-strip')!,
 		docTitle: document.getElementById('doc-title')!,
 		fileList: document.getElementById('file-list')!,
 		fileFilter: document.getElementById('file-filter') as HTMLInputElement,
@@ -49,8 +63,6 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 	let treeEntries: readonly TreeEntry[] = [];
 	let headings: readonly HeadingInfo[] = [];
 	let activeSlug: string | undefined;
-	/** What the host was last told is showing, so a live reload does not re-send it. */
-	let syncedPath: string | undefined;
 
 	// ---------------------------------------------------------------------- file list
 
@@ -85,7 +97,9 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 
 			const dir = entry.relativePath.slice(0, entry.relativePath.length - entry.name.length);
 			button.innerHTML = `<span>${dir ? `<span class="file-dir">${escapeHtml(dir)}</span>` : ''}${escapeHtml(entry.name)}</span>`;
-			button.addEventListener('click', () => void api.openPath(entry.path));
+			// Browsing the list previews; a double-click keeps the tab, as in VS Code's explorer.
+			button.addEventListener('click', () => void openInTab(entry.path, { mode: 'preview' }));
+			button.addEventListener('dblclick', () => void openInTab(entry.path, { mode: 'pinned' }));
 			el.fileList.appendChild(button);
 		}
 	}
@@ -183,34 +197,223 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 		}
 	}
 
-	for (const chrome of [document.getElementById('toolbar')!, el.fileList, el.tocList, el.findBar]) {
+	for (const chrome of [document.getElementById('toolbar')!, el.tabStrip, el.fileList, el.tocList, el.findBar]) {
 		chrome.addEventListener('mousedown', event => {
-			if ((event.target as HTMLElement).closest('button')) {
+			if ((event.target as HTMLElement).closest('button, .tab')) {
 				event.preventDefault();
 			}
 		});
 	}
 
-	// --------------------------------------------------------------- host documents
+	// -------------------------------------------------------------------------- tabs
+
+	/*
+	 * One `DocumentView` serves every tab, as one `EditorPane` serves every input of its type in
+	 * VS Code: activating a tab hands the view that tab's document and the view state it was
+	 * left with. The model holds neither text nor DOM, so the text lives here, by path.
+	 */
+	const tabs = new TabsModel();
+	const strip = createTabStrip(el.tabStrip, tabs);
+	const texts = new Map<string, MarkDocument>();
+	/** Same equivalence as `samePath`, as a map key. */
+	const keyOf = (path: string) => path.replace(/\\/g, '/').toLowerCase();
+
+	/** The tab whose document the view was last handed. */
+	let shownTabId: number | undefined;
+	/** Guards `showActiveTab` against a later activation overtaking an earlier one. */
+	let showSeq = 0;
 
 	/**
-	 * Scope the host's watching and resource access to what is showing. The About page is the
-	 * shell's own text rather than a file, so it leaves the host's scope as it was.
-	 *
-	 * Today this runs as the view shows the document rather than before, which is safe only
-	 * because there is one document and the backend's own open path has already set the
-	 * roots. With tabs, the shell has to await this before handing the active one to the view.
+	 * Open a document from inside the page — the file list, a link, a folder's README. It is
+	 * read first, so a file that cannot be read never gets a tab; the host has already said why.
 	 */
-	function syncHostDocuments(doc: MarkDocument | undefined): void {
-		if (doc?.path === ABOUT_PATH) {
+	async function openInTab(path: string, options: OpenOptions): Promise<void> {
+		const existing = tabs.find(path);
+		if (existing) {
+			openTab(existing.path, options);
 			return;
 		}
-		const path = doc?.path;
-		if (path === syncedPath) {
+		const doc = await api.readFile(path);
+		if (doc) {
+			texts.set(keyOf(doc.path), doc);
+			openTab(doc.path, options);
+			// As opening it through the host would have.
+			void api.noteRecentDocument(doc.path);
+		}
+	}
+
+	/**
+	 * `tabs.open`, plus the one case its change event does not cover: opening the tab that is
+	 * already showing. A link to `this.md#section`, say, still has a fragment to reveal.
+	 */
+	function openTab(path: string, options: OpenOptions): void {
+		const before = tabs.active?.id;
+		const tab = tabs.open(path, options);
+		if (tab.id === before && tab.id === shownTabId) {
+			refreshShownTab();
+		}
+	}
+
+	function refreshShownTab(): void {
+		const tab = shownTabId === undefined ? undefined : tabs.get(shownTabId);
+		const doc = tab && texts.get(keyOf(tab.path));
+		if (doc) {
+			view.setDocument(doc, { preserveScroll: true });
+		}
+	}
+
+	/**
+	 * Hand the view the active tab. The host is told first and awaited: it serves `mdr://` only
+	 * from beside the active document, so rendering before it has switched would leave the new
+	 * document's images unreachable for their first paint.
+	 */
+	async function showActiveTab(): Promise<void> {
+		const seq = ++showSeq;
+		const tab = tabs.active;
+		if (!tab) {
+			shownTabId = undefined;
+			await syncHost();
+			if (seq === showSeq) {
+				view.clearDocument();
+			}
 			return;
 		}
-		syncedPath = path;
-		void api.syncDocuments(path === undefined ? [] : [path], path);
+
+		const key = keyOf(tab.path);
+		if (tab.path === ABOUT_PATH) {
+			// The shell's own text, not a file: a reopened About tab has nothing to read.
+			texts.set(key, ABOUT);
+		}
+		if (!texts.has(key)) {
+			const read = await api.readFile(tab.path);
+			if (seq !== showSeq) {
+				return;
+			}
+			if (!read) {
+				// Gone since it was opened, and the host has said so. Discarded rather than closed,
+				// so that reopening closed tabs does not keep landing on it.
+				tabs.discard(tab.id);
+				return;
+			}
+			// A save that arrived while this read was in flight is newer than what it returned.
+			if (!texts.has(key)) {
+				texts.set(key, read);
+			}
+		}
+
+		await syncHost();
+		if (seq !== showSeq) {
+			return;
+		}
+		// Read after the awaits, not before: a save or reload during them updated the text but
+		// could not render it, since this tab was not the one showing yet.
+		const doc = texts.get(key);
+		if (!doc) {
+			return;
+		}
+		shownTabId = tab.id;
+		view.setDocument(doc, { preserveScroll: false, viewState: tab.viewState as DocumentViewState | undefined });
+	}
+
+	/** The last state the host was told, and the call telling it — so a repeat can await it. */
+	let synced: { key: string; done: Promise<void> } | undefined;
+
+	/**
+	 * Tell the host which documents are open and which is showing, so it watches exactly those
+	 * and serves from beside the active one. The About tab is the shell's own text, not a file;
+	 * the host ignores paths like it.
+	 */
+	function syncHost(): Promise<void> {
+		const open = tabs.tabs.map(tab => tab.path);
+		const active = tabs.active?.path;
+		const key = JSON.stringify([open, active]);
+		if (synced?.key !== key) {
+			const call: { key: string; done: Promise<void> } = {
+				key,
+				// A failed call is forgotten, so the next one retries rather than re-throwing it.
+				done: api.syncDocuments(open, active).catch(error => {
+					if (synced === call) {
+						synced = undefined;
+					}
+					console.error('syncDocuments failed', error);
+				}),
+			};
+			synced = call;
+		}
+		return synced.done;
+	}
+
+	/**
+	 * Keeps the showing tab's view state current as the reader scrolls, so whatever happens to
+	 * it next — another tab activated, it closed and reopened — it has where it was left. The
+	 * path check skips the gap while the view is still painting the previous document.
+	 */
+	let viewStateRaf = 0;
+	el.viewer.addEventListener('scroll', () => {
+		if (viewStateRaf) {
+			return;
+		}
+		viewStateRaf = requestAnimationFrame(() => {
+			viewStateRaf = 0;
+			const tab = shownTabId === undefined ? undefined : tabs.get(shownTabId);
+			const current = view.currentDocument;
+			if (tab && current && samePath(tab.path, current.path)) {
+				tabs.setViewState(tab.id, view.getViewState());
+			}
+		});
+	}, { passive: true });
+
+	tabs.onChange(change => {
+		el.body.classList.toggle('has-tabs', tabs.tabs.length > 0);
+		strip.render();
+		// The model keeps no text, so text for a tab that has gone is dropped here.
+		const open = new Set(tabs.tabs.map(tab => keyOf(tab.path)));
+		for (const key of texts.keys()) {
+			if (!open.has(key)) {
+				texts.delete(key);
+			}
+		}
+		if (change.activeChanged) {
+			void showActiveTab();
+		} else {
+			void syncHost();
+		}
+	});
+
+	/**
+	 * Ctrl+Tab walks the tabs by recent use while Ctrl is held, as VS Code's quick switch does,
+	 * over the order as it was when the walk began — activating each tab on the way would
+	 * otherwise reorder it underneath. Letting go of Ctrl ends the walk.
+	 */
+	let recentWalk: { readonly order: readonly number[]; index: number } | undefined;
+
+	function walkRecent(delta: number): void {
+		recentWalk ??= { order: tabs.recent.map(tab => tab.id), index: 0 };
+		// A tab closed mid-walk (Ctrl+W with Ctrl still held) is stepped over, not landed on.
+		const order = recentWalk.order;
+		const count = order.length;
+		for (let step = 0; step < count; step++) {
+			recentWalk.index = (((recentWalk.index + delta) % count) + count) % count;
+			if (tabs.get(order[recentWalk.index])) {
+				tabs.activate(order[recentWalk.index]);
+				return;
+			}
+		}
+	}
+
+	window.addEventListener('keyup', event => {
+		if (event.key === 'Control' || event.key === 'Meta') {
+			recentWalk = undefined;
+		}
+	});
+	window.addEventListener('blur', () => {
+		recentWalk = undefined;
+	});
+
+	function closeActiveTab(): void {
+		if (tabs.active) {
+			tabs.close(tabs.active.id);
+		}
 	}
 
 	// ---------------------------------------------------------------- document events
@@ -219,7 +422,6 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 		el.body.classList.toggle('no-document', !doc);
 		updateTitle();
 		renderFileList();
-		syncHostDocuments(doc);
 		if (doc) {
 			focusViewerIfUnclaimed();
 		}
@@ -278,8 +480,24 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 
 	// ------------------------------------------------------------------------- wiring
 
-	api.onDocumentOpened(doc => view.setDocument(doc, { preserveScroll: false }));
-	api.onDocumentChanged(doc => view.setDocument(doc, { preserveScroll: true }));
+	// Opened from outside the page — the dialog, the command line, a second launch, a drop. The
+	// host has read it fresh, so an already open tab takes the new text.
+	api.onDocumentOpened(doc => {
+		texts.set(keyOf(doc.path), doc);
+		openTab(doc.path, { mode: 'pinned' });
+	});
+
+	// Saved on disk. A background tab only stores the text, and shows it once activated.
+	api.onDocumentChanged(doc => {
+		const tab = tabs.find(doc.path);
+		if (!tab) {
+			return;
+		}
+		texts.set(keyOf(tab.path), doc);
+		if (tab.id === shownTabId) {
+			view.setDocument(doc, { preserveScroll: true });
+		}
+	});
 
 	api.onFolderOpened(payload => {
 		rootPath = payload.root;
@@ -289,9 +507,9 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 		togglePane('sidebar', true);
 		renderFileList();
 		// Opening a folder with no document showing? Show its README or first file.
-		if (!view.currentDocument && treeEntries.length) {
+		if (!tabs.active && treeEntries.length) {
 			const readme = treeEntries.find(e => /^readme\./i.test(e.name)) ?? treeEntries[0];
-			void api.openPath(readme.path);
+			void openInTab(readme.path, { mode: 'preview' });
 		}
 	});
 
@@ -349,10 +567,26 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 		view.render();
 	});
 	api.onCommand('command:find', () => openFind());
-	api.onCommand('command:reloadDocument', () => void view.reload());
-	api.onCommand('command:about', () => {
-		view.setDocument({ path: ABOUT_PATH, text: ABOUT_DOCUMENT }, { preserveScroll: false });
+	api.onCommand('command:reloadDocument', () => {
+		const tab = tabs.active;
+		if (!tab || tab.path === ABOUT_PATH) {
+			return;
+		}
+		void api.readFile(tab.path).then(doc => {
+			if (doc && tabs.get(tab.id)) {
+				texts.set(keyOf(tab.path), doc);
+				if (tab.id === shownTabId) {
+					view.setDocument(doc, { preserveScroll: true });
+				}
+			}
+		});
 	});
+	api.onCommand('command:about', () => {
+		texts.set(keyOf(ABOUT_PATH), ABOUT);
+		openTab(ABOUT_PATH, { mode: 'pinned' });
+	});
+	api.onCommand('command:closeTab', () => closeActiveTab());
+	api.onCommand('command:reopenClosedTab', () => void tabs.reopenClosed());
 
 	// Keyboard shortcuts that aren't menu accelerators
 	window.addEventListener('keydown', event => {
@@ -360,6 +594,29 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 			closeFind();
 			return;
 		}
+
+		// Tab switching. Not menu accelerators: Ctrl+Tab is not reliably one on every platform,
+		// and the walk needs to see Ctrl being let go.
+		if (event.ctrlKey && !event.altKey && !event.metaKey) {
+			if (event.key === 'Tab') {
+				event.preventDefault();
+				walkRecent(event.shiftKey ? -1 : 1);
+				return;
+			}
+			if (event.key === 'PageDown' || event.key === 'PageUp') {
+				event.preventDefault();
+				tabs.activateRelative(event.key === 'PageDown' ? 1 : -1);
+				return;
+			}
+			// By key position, not character: AZERTY types `&` on the key that is `1` elsewhere.
+			const digit = /^Digit([1-9])$/.exec(event.code);
+			if (!event.shiftKey && digit) {
+				event.preventDefault();
+				tabs.activateIndex(Number(digit[1]) - 1);
+				return;
+			}
+		}
+
 		// Ctrl+F is also a menu accelerator, but catching it here keeps focus behaviour
 		// consistent when the find bar is already open.
 		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
@@ -387,7 +644,7 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 		}
 		const droppedPath = api.pathForFile(file);
 		if (droppedPath) {
-			void api.openPath(droppedPath);
+			void openInTab(droppedPath, { mode: 'pinned' });
 		}
 	});
 
@@ -417,6 +674,13 @@ export function startDesktopShell({ view, api }: ShellOptions): void {
 	updateTitle();
 	renderFileList();
 	view.render();
+
+	return {
+		// A link Ctrl-clicked into the background is kept: previews replace each other, and a
+		// reader collecting links to come back to wants all of them.
+		openPath: (filePath, options) =>
+			openInTab(filePath, options?.background ? { mode: 'pinned', background: true } : { mode: 'preview' }),
+	};
 }
 
 const ABOUT_PATH = 'About MarkReader';
@@ -445,6 +709,11 @@ Those files are MIT licensed, © Microsoft Corporation.
 | --- | --- |
 | Open file | \`Ctrl+O\` |
 | Open folder | \`Ctrl+Shift+O\` |
+| Close tab | \`Ctrl+W\` |
+| Reopen closed tab | \`Ctrl+Shift+T\` |
+| Next / previous tab, by recent use | \`Ctrl+Tab\` / \`Ctrl+Shift+Tab\` |
+| Next / previous tab, by position | \`Ctrl+PgDn\` / \`Ctrl+PgUp\` |
+| Go to tab 1–8, or the last | \`Ctrl+1\` … \`Ctrl+8\`, \`Ctrl+9\` |
 | Toggle sidebar | \`Ctrl+B\` |
 | Toggle outline | \`Ctrl+Shift+B\` |
 | Find in document | \`Ctrl+F\` |
@@ -452,3 +721,6 @@ Those files are MIT licensed, © Microsoft Corporation.
 | Reload document | \`Ctrl+R\` |
 | Zoom | \`Ctrl+\` / \`Ctrl-\` |
 `;
+
+/** The About tab's document. Not a file: the host is never asked to read it. */
+const ABOUT: MarkDocument = { path: ABOUT_PATH, text: ABOUT_DOCUMENT };

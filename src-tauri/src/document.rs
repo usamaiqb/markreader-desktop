@@ -151,7 +151,7 @@ pub fn open(app: &AppHandle, label: &str, path: &Path) {
 		return;
 	};
 
-	crate::recent::add(&path);
+	note_recent(app, &path);
 
 	// Before the document reaches the page, so its assets can be fetched the moment it renders
 	// and nothing outside its directory can be.
@@ -211,6 +211,17 @@ pub fn open_folder(app: &AppHandle, label: &str, root: &Path) {
 			"entries": entries,
 		}),
 	);
+}
+
+/// Adds a document to the OS recent-documents list — the Windows jump list.
+///
+/// Not during a `--smoke` run, which opens its fixtures through every path that would, and
+/// would otherwise leave them in the developer's own list.
+pub fn note_recent(app: &AppHandle, path: &Path) {
+	let smoke = app.try_state::<AppState>().is_some_and(|state| state.smoke.is_some());
+	if !smoke {
+		crate::recent::add(path);
+	}
 }
 
 /// Runs `update` on the window's state, creating it the first time the window opens anything.

@@ -137,8 +137,12 @@ export class DocumentView {
 	/** Scroll offsets are restored per document, so revisiting a file lands where you left. */
 	private readonly scrollMemory = new Map<string, number>();
 
-	/** Set when a link carried a fragment, consumed once that document has rendered. */
-	private pendingFragment: string | undefined;
+	/**
+	 * Set when a link carried a fragment, consumed once *that* document renders. Tied to the
+	 * link's target, because the next document to render is not necessarily it: a host with
+	 * several documents may render another first (a reload, a switch), or never open the target.
+	 */
+	private pendingFragment: { readonly path: string; readonly slug: string } | undefined;
 
 	private findMatches: Range[] = [];
 	private findIndex = 0;
@@ -165,6 +169,13 @@ export class DocumentView {
 		this.themeRoot = options.root.ownerDocument.body;
 
 		this.root.addEventListener('click', event => this.onLinkClick(event));
+		// A middle click arrives as `auxclick`, and left alone the webview would open the link
+		// in a new window of its own.
+		this.root.addEventListener('auxclick', event => {
+			if (event.button === 1) {
+				this.onLinkClick(event);
+			}
+		});
 
 		this.scroll.onScroll(() => this.onScroll());
 
@@ -249,10 +260,10 @@ export class DocumentView {
 		this.emit('document', doc);
 		this.render();
 
-		if (this.pendingFragment) {
-			const fragment = this.pendingFragment;
+		if (this.pendingFragment && samePath(this.pendingFragment.path, doc.path)) {
+			const { slug } = this.pendingFragment;
 			this.pendingFragment = undefined;
-			requestAnimationFrame(() => this.revealSlug(fragment));
+			requestAnimationFrame(() => this.revealSlug(slug));
 			return;
 		}
 
@@ -266,6 +277,23 @@ export class DocumentView {
 			top = this.scrollMemory.get(doc.path) ?? 0;
 		}
 		requestAnimationFrame(() => this.scroll.scrollTo(top));
+	}
+
+	/**
+	 * Show nothing — the host closed the last document it had. Anything still loading for a
+	 * previous `setDocument` is abandoned rather than painted afterwards.
+	 */
+	clearDocument(): void {
+		++this.documentSeq;
+		if (this.doc) {
+			this.scrollMemory.set(this.doc.path, this.scroll.scrollTop);
+		}
+		this.doc = undefined;
+		this.pendingFragment = undefined;
+		this.emit('document', undefined);
+		this.render();
+		// `render()` skips this with nothing to render; an open find bar would keep its old count.
+		this.refreshFind();
 	}
 
 	/** Re-read the showing document from the host and re-render it in place. */
@@ -713,8 +741,16 @@ export class DocumentView {
 			return;
 		}
 		if (isMarkdownPath(resolved)) {
-			this.pendingFragment = rawHref.includes('#') ? rawHref.slice(rawHref.indexOf('#') + 1) : undefined;
-			void this.host.openPath(resolved);
+			// Ctrl/Cmd or the middle button asks for it behind the current document, as a browser
+			// opens a background tab. The fragment is for when the document shows, so a
+			// background open leaves any pending one alone rather than setting its own.
+			const background = event.ctrlKey || event.metaKey || event.button === 1;
+			if (!background) {
+				this.pendingFragment = rawHref.includes('#')
+					? { path: resolved, slug: rawHref.slice(rawHref.indexOf('#') + 1) }
+					: undefined;
+			}
+			void this.host.openPath(resolved, { background });
 		} else if (capabilitiesOf(this.host).revealInFolder) {
 			// A link to a non-markdown file goes to the file manager, where there is one.
 			// Android has none, and the click is simply inert there.
