@@ -47,6 +47,13 @@ impl Smoke {
 		let report = self.report_path.as_ref()?;
 		Some(report.with_file_name("settings.json"))
 	}
+
+	/// The same, for the open tabs `session.rs` saves: a run starts with none restored, and
+	/// leaves the developer's own session alone.
+	pub fn session_path(&self) -> Option<PathBuf> {
+		let report = self.report_path.as_ref()?;
+		Some(report.with_file_name("session.json"))
+	}
 }
 
 /// Injected before any page script runs, so JavaScript errors from start-up are recorded too.

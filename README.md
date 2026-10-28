@@ -35,7 +35,7 @@ Once installed, double-clicking any `.md` or `.markdown` file opens it in MarkRe
 
 - **Faithful rendering:** CommonMark, GFM tables, syntax highlighting, KaTeX math and Mermaid diagrams, using the same stylesheets as VS Code's preview
 - **Open from anywhere:** file picker, drag-and-drop, terminal, or double-click
-- **Tabs** for every open document, with VS Code-style preview tabs while you browse
+- **Tabs** for every open document, with VS Code-style preview tabs while you browse, reopened where you left them on the next launch
 - **Folder browsing** with a sidebar of your Markdown files
 - **Live reload** that keeps your scroll position
 - **Outline, find and themes** that follow your OS

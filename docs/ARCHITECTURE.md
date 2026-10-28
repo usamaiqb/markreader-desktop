@@ -18,6 +18,7 @@ src-tauri/               the backend (Rust)
     tree.rs              collects markdown files for the sidebar
     menu.rs              application menu; view state lives in the renderer
     settings.rs          settings.json: read at start-up, written on every change
+    session.rs           session.json: the open tabs, restored at start-up
     recent.rs            Windows recent-documents list
     cli.rs               argv parsing: `markreader notes.md todo.md`
     smoke.rs             the --smoke test hook
@@ -178,6 +179,14 @@ The renderer still owns the shape of the configuration, and still does not know 
   does not recognize or cannot use, so a hand-edited or stale file costs only the entries that
   are actually wrong. `onConfigChanged()` is the hook the host saves from — nothing else in the
   renderer uses it.
+
+The open tabs are kept the same way, in `session.json` beside it (`session.rs`, injected as
+`__MARKREADER_SESSION__`). The renderer owns that shape too — it is `TabsModel.serialize()` —
+and validates it with `TabsModel.restore()`. The backend knows one thing about it, that it has
+`tabs[].path`, so it can report which of those files are gone: the renderer cannot ask without
+an error dialog per missing file. Only the active tab is read at start-up; the others are read
+when first activated. Writes are coalesced while the reader scrolls, and flushed on `pagehide`.
+`"restoreSession": false` in `settings.json` turns restoring off.
 
 An unreadable or malformed file reads as "nothing stored", never as an error. Writes go through
 a temp file and a rename, so a crash part-way through one cannot leave a truncated file behind

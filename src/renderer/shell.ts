@@ -59,6 +59,11 @@ export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 		btnOutline: document.getElementById('btn-toggle-outline')!,
 	};
 
+	// Settings from the previous run, before anything is painted: the host has already read
+	// them off disk, so `applyTheme()` below applies the stored theme rather than the default.
+	// First, too, because whether to restore the last session is one of them.
+	setConfig(parseConfig(api.settings));
+
 	let rootPath: string | undefined;
 	let treeEntries: readonly TreeEntry[] = [];
 	let headings: readonly HeadingInfo[] = [];
@@ -212,7 +217,7 @@ export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 	 * VS Code: activating a tab hands the view that tab's document and the view state it was
 	 * left with. The model holds neither text nor DOM, so the text lives here, by path.
 	 */
-	const tabs = new TabsModel();
+	const tabs = restoreTabs(api);
 	const strip = createTabStrip(el.tabStrip, tabs);
 	const texts = new Map<string, MarkDocument>();
 	/** Same equivalence as `samePath`, as a map key. */
@@ -359,7 +364,36 @@ export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 	// Synchronously, not on the next animation frame: storing it is cheap, and a frame is not
 	// guaranteed to come in time — WebKitGTK throttles them in a window it thinks is hidden,
 	// so a deferred record could miss the switch it was needed for.
-	el.viewer.addEventListener('scroll', () => recordShownViewState(), { passive: true });
+	el.viewer.addEventListener('scroll', () => {
+		recordShownViewState();
+		scheduleSessionSave();
+	}, { passive: true });
+
+	/** What was last written, so an unchanged session is not written again. */
+	let savedSession = JSON.stringify(tabs.serialize());
+	let sessionTimer = 0;
+
+	/**
+	 * Writes the open tabs for the next launch to restore. Coalesced, since scrolling changes
+	 * the view state continuously and the file only needs where the reader stopped; flushed
+	 * at once when the page goes away, which is the write that matters most.
+	 */
+	function scheduleSessionSave(): void {
+		window.clearTimeout(sessionTimer);
+		sessionTimer = window.setTimeout(saveSession, SESSION_SAVE_DELAY);
+	}
+
+	function saveSession(): void {
+		window.clearTimeout(sessionTimer);
+		const session = tabs.serialize();
+		const serialized = JSON.stringify(session);
+		if (serialized !== savedSession) {
+			savedSession = serialized;
+			void api.saveSession(session);
+		}
+	}
+
+	window.addEventListener('pagehide', () => saveSession());
 
 	tabs.onChange(change => {
 		// The tab being left, before anything changes what the view shows.
@@ -380,6 +414,7 @@ export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 		} else {
 			void syncHost();
 		}
+		scheduleSessionSave();
 	});
 
 	/**
@@ -652,10 +687,6 @@ export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 
 	// ------------------------------------------------------------------------ start-up
 
-	// Settings from the previous run, before anything is painted: the host has already read
-	// them off disk, so `applyTheme()` below applies the stored theme rather than the default.
-	setConfig(parseConfig(api.settings));
-
 	// Registered after the restore, so restoring is not itself a write. Toggling a setting to
 	// the value it already has is not one either — that keeps a no-op menu click off the disk.
 	let savedSettings = JSON.stringify(serializeConfig());
@@ -677,6 +708,13 @@ export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 	renderFileList();
 	view.render();
 
+	// Restored tabs are in the model already, which raised no change for them.
+	if (tabs.active) {
+		el.body.classList.add('has-tabs');
+		strip.render();
+		void showActiveTab();
+	}
+
 	return {
 		// A link Ctrl-clicked into the background is kept: previews replace each other, and a
 		// reader collecting links to come back to wants all of them.
@@ -686,6 +724,22 @@ export function startDesktopShell({ view, api }: ShellOptions): DesktopShell {
 }
 
 const ABOUT_PATH = 'About MarkReader';
+
+/** How long the session waits for scrolling to stop before it is written. */
+const SESSION_SAVE_DELAY = 1000;
+
+/**
+ * The tabs a previous run left open, when the reader wants them back. Files that have gone
+ * since are left out, as the host reported them — asking for each would show an error dialog
+ * per missing file, before the window had even appeared.
+ */
+function restoreTabs(api: MarkReaderApi): TabsModel {
+	if (!getConfig().restoreSession || !api.session) {
+		return new TabsModel();
+	}
+	const missing = new Set(api.session.missing);
+	return TabsModel.restore(api.session.data, path => !missing.has(path));
+}
 
 const ABOUT_DOCUMENT = `# MarkReader
 

@@ -352,20 +352,34 @@
 		const emitCommand = channel => invoke('plugin:event|emit', { event: channel, payload: null });
 
 		const strip = document.getElementById('tab-strip');
-		// smoke.mjs launches with two files: the b.md fixture, then the sample.
-		await waitFor('both start-up documents to have tabs', () => tabEls().length === 2 && kitchenShowing())
+		// smoke-documents.mjs leaves a session from a "previous run" — a.md, and a file deleted
+		// since — and launches with two files: the b.md fixture, then the sample.
+		await waitFor('the start-up tabs', () => tabEls().length === 3 && kitchenShowing())
 			.catch(() => null);
 		const startTabs = tabEls();
-		check('each file on the command line gets a tab, in order',
-			startTabs.length === 2 && tabPath(startTabs[0]).endsWith('/tabs/b.md') && tabPath(startTabs[1]).endsWith('/samples/kitchen-sink.md'),
+		check('the previous session\'s tabs are restored', tabPath(startTabs[0]).endsWith('/tabs/a.md'), tabState());
+		check('... less any whose file has gone since', !tabFor('tabs/deleted-since.md'), tabState());
+		check('each file on the command line gets a tab, in order, after them',
+			startTabs.length === 3 && tabPath(startTabs[1]).endsWith('/tabs/b.md')
+				&& tabPath(startTabs[2]).endsWith('/samples/kitchen-sink.md'),
 			tabState());
 		check('the last file on the command line is the one showing', kitchenShowing(), tabState());
 		check('the start-up tabs are pinned, not previews',
-			startTabs.length === 2 && startTabs.every(tab => !tab.classList.contains('preview')), tabState());
+			startTabs.length === 3 && startTabs.every(tab => !tab.classList.contains('preview')), tabState());
+
+		// The restored tab has never been shown, so it has not been read; activating it does that.
+		mouse(tabFor('tabs/a.md'), 'click');
+		await waitFor('the restored tab to show', () => showing('tabs/a.md', 'Tabs fixture A')).catch(() => null);
+		check('a restored tab shows its document once activated', showing('tabs/a.md', 'Tabs fixture A'), tabState());
+		await waitFor('its scroll to be restored', () => Math.abs(viewer.scrollTop - 300) <= 2).catch(() => null);
+		check('... where the previous run left it', Math.abs(viewer.scrollTop - 300) <= 2,
+			`at ${viewer.scrollTop}, wanted 300`);
 
 		// The rest of this section counts tabs from the sample alone.
+		mouse(tabFor('tabs/a.md')?.querySelector('.tab-close'), 'click');
 		mouse(tabFor('tabs/b.md')?.querySelector('.tab-close'), 'click');
-		check('closing the extra start-up tab leaves the sample', tabEls().length === 1 && kitchenShowing(), tabState());
+		await waitFor('the sample to show again', () => kitchenShowing()).catch(() => null);
+		check('closing the extra start-up tabs leaves the sample', tabEls().length === 1 && kitchenShowing(), tabState());
 		check('the tab strip shows', getComputedStyle(strip).display !== 'none' && strip.offsetHeight > 0,
 			`display ${getComputedStyle(strip).display}, height ${strip.offsetHeight}`);
 
