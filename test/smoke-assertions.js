@@ -54,8 +54,14 @@
 	try {
 		log('');
 		log('--- document loading ---');
-		await waitFor('document rendered', () =>
-			document.querySelectorAll('#markdown-body h1').length > 0);
+		// The sample in particular, not just a document: the restored session's tab and the
+		// command line's first file are painted on the way to it, and on a slow machine the
+		// checks below would otherwise read one of those. The title changes as the document is
+		// rendered, so once it names the sample the sample is what is in the DOM.
+		const sampleName = String(smoke.file ?? '').split(/[\\/]/).pop();
+		await waitFor('the sample rendered', () =>
+			!!sampleName && document.title.startsWith(sampleName + ' ')
+			&& document.querySelectorAll('#markdown-body h1').length > 0);
 		check('document renders', true);
 
 		log('');
