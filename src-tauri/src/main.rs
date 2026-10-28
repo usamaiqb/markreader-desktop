@@ -51,8 +51,11 @@ pub struct AppState {
 	/// nothing the `mdr://` scheme will serve it.
 	pub windows: Mutex<HashMap<String, WindowState>>,
 	pub zoom: Mutex<f64>,
-	/// Document from the command line, held until the frontend has listeners attached.
-	pub startup_file: Mutex<Option<PathBuf>>,
+	/// Documents asked for before the frontend had listeners attached — the command line, or
+	/// a file the OS hands over at launch — held until it has. See `document::open_when_ready`.
+	pub pending_files: Mutex<Vec<PathBuf>>,
+	/// Set by `frontend_ready`. Until then a `document:opened` would reach nobody.
+	pub frontend_ready: AtomicBool,
 	pub window_shown: AtomicBool,
 	pub smoke: Option<smoke::Smoke>,
 }
@@ -84,7 +87,8 @@ fn run() -> i32 {
 	let state = AppState {
 		windows: Mutex::new(HashMap::new()),
 		zoom: Mutex::new(1.0),
-		startup_file: Mutex::new(cli.file.clone()),
+		pending_files: Mutex::new(cli.files.clone()),
+		frontend_ready: AtomicBool::new(false),
 		window_shown: AtomicBool::new(false),
 		smoke: cli
 			.smoke_script
@@ -105,9 +109,7 @@ fn run() -> i32 {
 				}
 				let _ = window.set_focus();
 			}
-			if let Some(file) = cli::parse(argv.into_iter().skip(1)).file {
-				document::open(app, WINDOW_LABEL, &file);
-			}
+			document::open_when_ready(app, WINDOW_LABEL, cli::parse(argv.into_iter().skip(1)).files);
 		}))
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_opener::init())
@@ -152,7 +154,8 @@ fn run() -> i32 {
 					.try_state::<AppState>()
 					.and_then(|state| state.smoke.as_ref().and_then(smoke::Smoke::settings_path));
 				builder = builder.initialization_script(smoke::init_script(
-					cli.file.as_deref(),
+					// The one left showing, which is the last opened.
+					cli.files.last().map(PathBuf::as_path),
 					&scan_root,
 					settings.as_deref(),
 				));
@@ -185,15 +188,14 @@ fn run() -> i32 {
 			}
 			// macOS: double-clicking a .md in Finder.
 			#[cfg(target_os = "macos")]
+			// At launch this can arrive before the page is listening, hence `open_when_ready`.
 			tauri::RunEvent::Opened { urls } => {
-				for url in urls {
-					if let Ok(path) = url.to_file_path() {
-						if path.is_file() {
-							document::open(app, WINDOW_LABEL, &path);
-							break;
-						}
-					}
-				}
+				let files = urls
+					.iter()
+					.filter_map(|url| url.to_file_path().ok())
+					.filter(|path| path.is_file())
+					.collect();
+				document::open_when_ready(app, WINDOW_LABEL, files);
 			}
 			tauri::RunEvent::Exit => {
 				if let Some(state) = app.try_state::<AppState>() {

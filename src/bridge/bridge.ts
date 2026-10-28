@@ -127,10 +127,17 @@ void getCurrentWebview().onDragDropEvent(event => {
 		return;
 	}
 
-	const dropped = payload.paths.find(p => MARKDOWN_PATTERN.test(p)) ?? payload.paths[0];
-	if (dropped) {
-		void api.openPath(dropped);
-	}
+	// Every markdown file dropped gets a tab. With none among them, the first path is tried
+	// anyway, as one file always was — the backend reports what it cannot read.
+	const markdown = payload.paths.filter(p => MARKDOWN_PATTERN.test(p));
+	const dropped = markdown.length ? markdown : payload.paths.slice(0, 1);
+	void (async () => {
+		// One at a time, so the tabs open in the order the files were dropped and the last
+		// one is left showing.
+		for (const path of dropped) {
+			await api.openPath(path);
+		}
+	})();
 });
 
 // ----------------------------------------------------------------------------- hand-off

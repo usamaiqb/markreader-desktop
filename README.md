@@ -35,6 +35,7 @@ Once installed, double-clicking any `.md` or `.markdown` file opens it in MarkRe
 
 - **Faithful rendering:** CommonMark, GFM tables, syntax highlighting, KaTeX math and Mermaid diagrams, using the same stylesheets as VS Code's preview
 - **Open from anywhere:** file picker, drag-and-drop, terminal, or double-click
+- **Tabs** for every open document, with VS Code-style preview tabs while you browse
 - **Folder browsing** with a sidebar of your Markdown files
 - **Live reload** that keeps your scroll position
 - **Outline, find and themes** that follow your OS
@@ -53,8 +54,11 @@ Once installed, double-clicking any `.md` or `.markdown` file opens it in MarkRe
 
 | Action | How |
 | --- | --- |
-| Open a file | `Ctrl+O`, **Open** button, or drag-and-drop |
+| Open files | `Ctrl+O`, **Open** button, or drag-and-drop — several at once each get a tab |
 | Open a folder | `Ctrl+Shift+O`, or **Folder** button |
+| Close / reopen a tab | `Ctrl+W` / `Ctrl+Shift+T` |
+| Switch tabs | `Ctrl+Tab` (most recent), `Ctrl+PgDn` / `Ctrl+PgUp`, `Ctrl+1`…`Ctrl+9` |
+| Keep a preview tab | Double-click it, or the file in the sidebar |
 | Toggle sidebar | `Ctrl+B` |
 | Toggle outline | `Ctrl+Shift+B` |
 | Find in document | `Ctrl+F` (`Enter` / `Shift+Enter` for next / previous) |
@@ -63,14 +67,14 @@ Once installed, double-clicking any `.md` or `.markdown` file opens it in MarkRe
 | Zoom | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` |
 | Full screen | `F11` |
 
-Open a document from the terminal:
+Open documents from the terminal — each file named gets a tab:
 
 | Platform | Command |
 | --- | --- |
-| Linux (`.deb`) | `markreader notes.md` |
-| Windows | `& "$env:LOCALAPPDATA\MarkReader\MarkReader.exe" notes.md` |
+| Linux (`.deb`) | `markreader notes.md todo.md` |
+| Windows | `& "$env:LOCALAPPDATA\MarkReader\MarkReader.exe" notes.md todo.md` |
 
-A second launch doesn't start a second app — it hands the file to the running window.
+A second launch doesn't start a second app — it hands its files to the running window, as new tabs.
 
 ## Building from source
 
