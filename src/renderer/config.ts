@@ -23,6 +23,8 @@ export interface MarkReaderConfig extends MarkdownItConfig {
 	readonly mermaid: boolean;
 	readonly showToc: boolean;
 	readonly wordWrap: boolean;
+	/** Reopen the tabs that were open at the last quit. Desktop only; no menu item. */
+	readonly restoreSession: boolean;
 	readonly fontSize: number;
 	readonly lineHeight: number;
 	readonly fontFamily: string;
@@ -42,6 +44,7 @@ export const defaultConfig: MarkReaderConfig = {
 	mermaid: true,
 	showToc: true,
 	wordWrap: true,
+	restoreSession: true,
 	fontSize: 14,
 	lineHeight: 22,
 	fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", system-ui, "Ubuntu", "Droid Sans", sans-serif',
@@ -154,6 +157,7 @@ const validators: { readonly [K in keyof MarkReaderConfig]: (value: unknown) => 
 	mermaid: asBoolean,
 	showToc: asBoolean,
 	wordWrap: asBoolean,
+	restoreSession: asBoolean,
 	// Bounds, not just types: a zero or negative size would render an unreadable document with
 	// no way to fix it from inside the app.
 	fontSize: inRange(6, 96),

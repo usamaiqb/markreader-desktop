@@ -16,7 +16,7 @@
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { prepareSmokeDocuments } from './smoke-documents.mjs';
+import { checkSavedSession, prepareSmokeDocuments } from './smoke-documents.mjs';
 
 const root = path.join(import.meta.dirname, '..');
 const tmp = path.join(root, 'test', 'tmp');
@@ -72,6 +72,16 @@ async function main() {
 			process.exit(1);
 		}
 		console.log('  PASS  settings saved to ' + path.relative(root, settingsFile));
+
+		const sessionFile = path.join(tmp, 'session.json');
+		const sessionProblem = await checkSavedSession(sessionFile);
+		if (sessionProblem) {
+			console.error('');
+			console.error('SESSION CHECK FAILED: ' + sessionProblem);
+			console.error('');
+			process.exit(1);
+		}
+		console.log('  PASS  open tabs saved to ' + path.relative(root, sessionFile));
 		console.log('');
 	}
 

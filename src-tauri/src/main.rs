@@ -18,6 +18,7 @@ mod document;
 mod menu;
 mod protocol;
 mod recent;
+mod session;
 mod settings;
 mod smoke;
 mod tree;
@@ -127,6 +128,7 @@ fn run() -> i32 {
 			commands::reveal_in_folder,
 			commands::set_window_background,
 			commands::save_settings,
+			commands::save_session,
 			commands::frontend_ready,
 			smoke::smoke_report,
 			smoke::smoke_append,
@@ -143,7 +145,9 @@ fn run() -> i32 {
 				.on_navigation(move |url| allow_navigation(&handle, url))
 				// Stored settings, handed to the page before any of its own scripts run — see
 				// settings.rs.
-				.initialization_script(settings::init_script(app.handle()));
+				.initialization_script(settings::init_script(app.handle()))
+				// And the tabs that were open at the last quit — see session.rs.
+				.initialization_script(session::init_script(app.handle()));
 
 			if cli.smoke_script.is_some() {
 				let scan_root = cli

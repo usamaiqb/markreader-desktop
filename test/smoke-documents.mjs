@@ -32,5 +32,54 @@ export async function prepareSmokeDocuments(root, tmp) {
 	const sample = path.join(tmp, 'samples', 'kitchen-sink.md');
 	await fs.appendFile(sample, '\n\nSee also the [tabs fixture](../fixtures/tabs/a.md).\n');
 
+	// A session from a "previous run" for the app to restore, where a --smoke run keeps it:
+	// one tab that is still there, and one whose file has gone since, which has to be skipped.
+	await fs.writeFile(path.join(tmp, 'session.json'), JSON.stringify(previousSession(tmp), null, '\t'));
+
 	return [path.join(tmp, 'fixtures', 'tabs', 'b.md'), sample];
+}
+
+function previousSession(tmp) {
+	return {
+		version: 1,
+		tabs: [
+			{
+				path: path.join(tmp, 'fixtures', 'tabs', 'a.md'),
+				viewerId: 'markdown',
+				preview: false,
+				viewState: { scrollTop: 300 },
+			},
+			{ path: path.join(tmp, 'fixtures', 'tabs', 'deleted-since.md'), viewerId: 'markdown', preview: false },
+		],
+		active: 0,
+	};
+}
+
+/**
+ * What is wrong with the session a run saved, or nothing if it is fine: the run ends with the
+ * sample open, so the sample has to be among the tabs written, and the file the previous
+ * session listed but that had gone must not have come back.
+ */
+export async function checkSavedSession(file) {
+	const text = await fs.readFile(file, 'utf8').catch(() => undefined);
+	if (text === undefined) {
+		return 'nothing was written to ' + file;
+	}
+	let session;
+	try {
+		session = JSON.parse(text);
+	} catch (error) {
+		return file + ' is not valid JSON: ' + error.message;
+	}
+	if (session.version !== 1 || !Array.isArray(session.tabs)) {
+		return file + ' is not a saved tab session';
+	}
+	const paths = session.tabs.map(tab => String(tab.path).replace(/\\/g, '/'));
+	if (!paths.some(p => p.endsWith('/samples/kitchen-sink.md'))) {
+		return 'the sample is not among the saved tabs: ' + JSON.stringify(paths);
+	}
+	if (paths.some(p => p.endsWith('/deleted-since.md'))) {
+		return 'a tab whose file had gone was saved again';
+	}
+	return undefined;
 }

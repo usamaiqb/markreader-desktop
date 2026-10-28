@@ -12,7 +12,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import type { FolderPayload, MarkDocument, MarkReaderApi } from '../renderer/host';
+import type { FolderPayload, MarkDocument, MarkReaderApi, StoredSession } from '../renderer/host';
 
 export type { FolderPayload, MarkDocument, MarkReaderApi };
 
@@ -61,6 +61,23 @@ function takeInjectedSettings(): Record<string, unknown> | undefined {
 }
 
 /**
+ * The session the backend injected the same way — see `src-tauri/src/session.rs` — and taken
+ * off `window` the same way. `undefined` if the shape is not the one the backend writes.
+ */
+function takeInjectedSession(): StoredSession | undefined {
+	const host = window as { __MARKREADER_SESSION__?: unknown };
+	const injected = host.__MARKREADER_SESSION__ as { data?: unknown; missing?: unknown } | undefined;
+	delete host.__MARKREADER_SESSION__;
+	if (typeof injected !== 'object' || injected === null || !Array.isArray(injected.missing)) {
+		return undefined;
+	}
+	return {
+		data: injected.data,
+		missing: injected.missing.filter((path): path is string => typeof path === 'string'),
+	};
+}
+
+/**
  * Annotated with the shared contract rather than inferred from this object, so that dropping
  * or renaming a member here is a compile error instead of a silently narrower `window
  * .markreader` for the renderer to trip over.
@@ -85,6 +102,9 @@ const api: MarkReaderApi = {
 	settings: takeInjectedSettings(),
 	saveSettings: (settings: Record<string, unknown>): Promise<void> =>
 		invoke('save_settings', { settings }),
+
+	session: takeInjectedSession(),
+	saveSession: (session: unknown): Promise<void> => invoke('save_session', { session }),
 
 	/**
 	 * A webview has no API for resolving a dropped `File` to a path: the paths arrive on the

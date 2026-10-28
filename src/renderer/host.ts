@@ -108,6 +108,14 @@ export interface DocumentHost {
 	showInFolder?(filePath: string): Promise<void>;
 }
 
+/** The tabs a previous run left open, as the desktop host hands them back. */
+export interface StoredSession {
+	/** What the renderer last saved, unvalidated — `TabsModel.restore()` does that. */
+	readonly data: unknown;
+	/** Paths among its tabs that are no longer files, which restoring skips. */
+	readonly missing: readonly string[];
+}
+
 /** The full surface the desktop bridge installs as `window.markreader`. */
 export interface MarkReaderApi extends DocumentHost {
 	openFileDialog(): Promise<void>;
@@ -116,6 +124,9 @@ export interface MarkReaderApi extends DocumentHost {
 	/** Settings from the previous run, already available when this module first runs. */
 	readonly settings: Record<string, unknown> | undefined;
 	saveSettings(settings: Record<string, unknown>): Promise<void>;
+	/** The tabs open at the last quit, already available when this module first runs. */
+	readonly session: StoredSession | undefined;
+	saveSession(session: unknown): Promise<void>;
 	pathForFile(file: File): string | undefined;
 	/**
 	 * Tell the host which documents are open and which one is showing. The host scopes file

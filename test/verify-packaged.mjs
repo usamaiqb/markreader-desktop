@@ -17,7 +17,7 @@ import { execFile, spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
-import { prepareSmokeDocuments } from './smoke-documents.mjs';
+import { checkSavedSession, prepareSmokeDocuments } from './smoke-documents.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -119,6 +119,8 @@ async function main() {
 	check('settings are written from the packaged binary', settings !== undefined, settingsFile);
 	check('the theme switch was persisted', settings?.theme === 'light',
 		JSON.stringify(settings?.theme));
+	const sessionProblem = await checkSavedSession(path.join(tmp, 'session.json'));
+	check('the open tabs are saved from the packaged binary', !sessionProblem, sessionProblem);
 
 	console.log('\n--- artifact size ---');
 	const exeSize = await sizeOf(exe);

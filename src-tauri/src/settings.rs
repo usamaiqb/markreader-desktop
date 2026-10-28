@@ -41,7 +41,7 @@ fn file(app: &AppHandle) -> Option<PathBuf> {
 ///
 /// The text is re-serialized from parsed JSON rather than passed through verbatim, which is what
 /// makes it safe to embed in the script below.
-fn read_json_at(path: Option<PathBuf>) -> String {
+pub(crate) fn read_json_at(path: Option<PathBuf>) -> String {
 	path.and_then(|path| std::fs::read_to_string(path).ok())
 		.and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
 		.filter(serde_json::Value::is_object)
@@ -60,7 +60,7 @@ pub fn init_script(app: &AppHandle) -> String {
 /// U+2028 and U+2029 are legal raw inside a JSON string but are line terminators to a
 /// JavaScript parser, so they are put back into their escaped JSON form — still valid JSON,
 /// and now safe as a JavaScript expression.
-fn escape_line_separators(json: &str) -> String {
+pub(crate) fn escape_line_separators(json: &str) -> String {
 	json.replace('\u{2028}', "\\u2028")
 		.replace('\u{2029}', "\\u2029")
 }
@@ -73,7 +73,7 @@ pub fn write(app: &AppHandle, settings: &serde_json::Value) {
 	}
 }
 
-fn write_to(path: &Path, settings: &serde_json::Value) {
+pub(crate) fn write_to(path: &Path, settings: &serde_json::Value) {
 	if let Some(parent) = path.parent() {
 		if std::fs::create_dir_all(parent).is_err() {
 			return;

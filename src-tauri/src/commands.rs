@@ -146,6 +146,12 @@ pub fn save_settings(app: AppHandle, settings: serde_json::Value) {
 	crate::settings::write(&app, &settings);
 }
 
+/// Persists the open tabs, as `save_settings` persists settings: stored as handed over.
+#[tauri::command]
+pub fn save_session(app: AppHandle, session: serde_json::Value) {
+	crate::session::write(&app, &session);
+}
+
 /// Called once the bridge and the renderer have both registered their event listeners. Until
 /// then there is nobody to receive `document:opened`, so a file from the command line has to
 /// wait here rather than race the listeners.
