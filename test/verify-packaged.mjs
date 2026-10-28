@@ -17,6 +17,7 @@ import { execFile, spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
+import { prepareSmokeDocuments } from './smoke-documents.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -62,18 +63,14 @@ async function main() {
 		throw new Error(`Packaged app not found at ${exe}\nRun: npm run package:dir`);
 	});
 
-	// The live-reload check appends to the document, so it works on a copy.
-	await fs.rm(tmp, { recursive: true, force: true });
-	await fs.mkdir(tmp, { recursive: true });
-	await fs.cp(path.join(root, 'samples'), path.join(tmp, 'samples'), { recursive: true });
-	const sample = path.join(tmp, 'samples', 'kitchen-sink.md');
+	const documents = await prepareSmokeDocuments(root, tmp);
 
 	console.log(`\nlaunching ${path.relative(root, exe)}`);
 	const child = spawn(exe, [
 		'--smoke', assertions,
 		'--smoke-out', reportFile,
 		'--smoke-root', root,
-		sample,
+		...documents,
 	], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
 
 	const stderr = [];

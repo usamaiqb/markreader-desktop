@@ -16,6 +16,7 @@
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { prepareSmokeDocuments } from './smoke-documents.mjs';
 
 const root = path.join(import.meta.dirname, '..');
 const tmp = path.join(root, 'test', 'tmp');
@@ -24,24 +25,8 @@ const reportFile = path.join(tmp, 'smoke-report.json');
 /** Where a --smoke run keeps its settings, instead of the user's config directory. */
 const settingsFile = path.join(tmp, 'settings.json');
 
-/** Fresh copy of the samples folder, so `samples/kitchen-sink.md` is never modified. */
-async function prepareSample() {
-	await fs.rm(tmp, { recursive: true, force: true });
-	await fs.mkdir(tmp, { recursive: true });
-	await fs.cp(path.join(root, 'samples'), path.join(tmp, 'samples'), { recursive: true });
-
-	// The tab checks need documents to link between, outside the sample's folder rather than
-	// inside it: the sample's folder is a resource root while it is active, so an image in a
-	// subfolder of it would load whether or not the roots follow the active tab. The link that
-	// reaches them is added to the copy, so the sample itself stays a plain showcase.
-	await fs.cp(path.join(root, 'test', 'fixtures'), path.join(tmp, 'fixtures'), { recursive: true });
-	const sample = path.join(tmp, 'samples', 'kitchen-sink.md');
-	await fs.appendFile(sample, '\n\nSee also the [tabs fixture](../fixtures/tabs/a.md).\n');
-	return sample;
-}
-
 async function main() {
-	const sample = await prepareSample();
+	const documents = await prepareSmokeDocuments(root, tmp);
 
 	// cargo runs from src-tauri so it picks up that crate's cargo config; the app is told
 	// which folder to scan for the sidebar checks rather than inferring it from the cwd.
@@ -52,10 +37,7 @@ async function main() {
 		'--smoke', assertions,
 		'--smoke-out', reportFile,
 		'--smoke-root', root,
-		// Two documents, so the start-up path for several is exercised: each gets a tab, and
-		// the last — the sample, which every later section reads — is left showing.
-		path.join(tmp, 'fixtures', 'tabs', 'b.md'),
-		sample,
+		...documents,
 	], {
 		cwd: path.join(root, 'src-tauri'),
 		stdio: 'inherit',
