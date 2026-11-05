@@ -94,7 +94,9 @@ export interface SetDocumentOptions {
 /**
  * Distance from the top of the scroll area at which a heading counts as "current". Both of these
  * are measured from the visible top of the document: they were 90 and 56 when the window scrolled
- * and the desktop's 38px toolbar overlapped the page, and are restated net of it.
+ * and the desktop's 38px toolbar overlapped the page, and are restated net of it. A host that
+ * overlays the top of the scroll area says so with `setCoveredTop`, and they are measured from
+ * below that instead.
  */
 const READING_LINE = 52;
 
@@ -217,6 +219,18 @@ export class DocumentView {
 	/** Where the reader is in the showing document; see `SetDocumentOptions.viewState`. */
 	getViewState(): DocumentViewState {
 		return { scrollTop: this.scroll.scrollTop };
+	}
+
+	/**
+	 * How many CSS px at the top of the scroll area the host draws over, so the reading line,
+	 * reveal headroom and find centring are measured from below it. A host whose chrome sits
+	 * above the scroll area, as desktop's toolbar does, never calls this. One that overlays it,
+	 * as Android's bars do, calls it whenever that chrome shows or hides; nothing scrolls when
+	 * it does, so the current heading is re-evaluated here.
+	 */
+	setCoveredTop(px: number): void {
+		this.scroll.coveredTop = px;
+		this.updateActiveHeading();
 	}
 
 	/** The folder a document was opened from, used to resolve root-relative links. */

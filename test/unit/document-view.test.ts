@@ -130,3 +130,42 @@ describe('scrolling goes to the scroller', () => {
 		expect(scrollTo).toHaveBeenLastCalledWith({ top: 0 });
 	});
 });
+
+describe('a covered top', () => {
+	/** Puts the rendered headings at these client-space tops; the scroller's own top is 0. */
+	function place(root: HTMLElement, tops: readonly number[]): void {
+		for (const [i, heading] of root.querySelectorAll('h1, h2').entries()) {
+			heading.getBoundingClientRect = () => ({ top: tops[i] } as DOMRect);
+		}
+	}
+
+	it('moves the reading line below it, without waiting for a scroll', async () => {
+		const { view, root } = fixture();
+		await show(view, { preserveScroll: false });
+		// The second heading sits just below a 115px bar: in plain view, but past a reading line
+		// measured from the very top.
+		place(root, [-200, 150]);
+		// Rendering saw jsdom's all-zero layout; settle on the placed one first.
+		view.setCoveredTop(0);
+		const active: (string | undefined)[] = [];
+		view.on('activeHeading', slug => active.push(slug));
+
+		view.setCoveredTop(115);
+		view.setCoveredTop(0);
+
+		expect(active).toEqual(['über', '1-intro']);
+	});
+
+	it('leaves the reveal headroom below it', async () => {
+		const { view, root, scrollTo } = fixture();
+		await show(view, { preserveScroll: false });
+		place(root, [400, 900]);
+
+		view.revealSlug('1-intro');
+		expect(scrollTo).toHaveBeenLastCalledWith({ top: 382, behavior: 'smooth' });
+
+		view.setCoveredTop(115);
+		view.revealSlug('1-intro');
+		expect(scrollTo).toHaveBeenLastCalledWith({ top: 267, behavior: 'smooth' });
+	});
+});
