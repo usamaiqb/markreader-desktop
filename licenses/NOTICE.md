@@ -24,6 +24,7 @@ Files derived from VS Code, and how much they changed:
 | `src/renderer/plugins.ts` (math) | `extensions/markdown-math/src/extension.ts` | Adapted — settings replaced |
 | `src/renderer/document.ts` | `extensions/markdown-language-features/preview-src/index.ts` | Adapted — editor scroll sync dropped; link handling, image and diagram hydration and the outline kept. This was `renderer.ts` until the document/shell split |
 | `src/renderer/mermaid/vsCodeTheme.ts` | `extensions/mermaid-markdown-features/preview-src/shared/vsCodeTheme.ts` | Verbatim |
+| `src/renderer/mermaid/subgraphTitles.ts` | `extensions/mermaid-markdown-features/preview-src/shared/subgraphTitles.ts` | Verbatim |
 | `src/renderer/mermaid/config.ts` | `extensions/mermaid-markdown-features/preview-src/shared/config.ts` | Verbatim |
 | `src/renderer/mermaid/disposable.ts` | `extensions/mermaid-markdown-features/preview-src/shared/disposable.ts` | Verbatim |
 | `src/renderer/markdown-language-features/util/dom.ts` | `extensions/markdown-language-features/src/util/dom.ts` | Verbatim. Its one `vscode` import resolves to `src/renderer/vscode.ts` |
@@ -44,7 +45,7 @@ local deviation belongs.
 
 `test/unit/vendored-files.test.ts` pins every *Verbatim* file by hash, so the next such edit fails a
 test rather than going unnoticed — though a hash only proves *unchanged since*, not *matches
-upstream*. That diff was last run against `microsoft/vscode` `main` at `57b4202903e` (2026-10-02):
+upstream*. That diff was last run against `microsoft/vscode` `main` at `aa078fca7d0` (2026-11-05):
 every *Verbatim* file is byte-identical to it.
 
 ## Bundled dependencies

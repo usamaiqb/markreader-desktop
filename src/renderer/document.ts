@@ -25,6 +25,7 @@ import { MarkdownItEngine, type HeadingInfo } from './engine';
 import { capabilitiesOf, type DocumentHost, type MarkDocument } from './host';
 import { ensureMath, prepareForDocument } from './lazy';
 import type { MermaidExtensionConfig } from './mermaid/config';
+import { placeSubgraphTitlesIn, subgraphTitleMargin } from './mermaid/subgraphTitles';
 import { VsCodeMermaidThemeTracker, vsCodeMermaidTheme } from './mermaid/vsCodeTheme';
 import { isMarkdownPath, samePath } from './paths';
 import { getPlugins } from './plugins';
@@ -457,6 +458,9 @@ export class DocumentView {
 		this.mermaidTheme.refresh();
 		mermaid.initialize({
 			startOnLoad: false,
+			// Upstream's `buildMermaidConfig`: room above subgraph nodes for the title band that
+			// `placeSubgraphTitlesIn` below moves titles within.
+			flowchart: { subGraphTitleMargin: { ...subgraphTitleMargin } },
 			...this.mermaidTheme.resolveMermaidTheme(MERMAID_THEME_CONFIG),
 			securityLevel: 'strict',
 			// Without this, a diagram that fails to parse leaves mermaid's "Syntax error in text"
@@ -486,6 +490,9 @@ export class DocumentView {
 				// above already runs its own DOMPurify pass over this SVG, and our document
 				// profile drops `foreignObject` — which is how mermaid draws HTML labels.
 				block.innerHTML = svg;
+				// As upstream's preview does, on the diagram just written: moves subgraph titles
+				// clear of the edges that enter them.
+				placeSubgraphTitlesIn(block);
 				if (fallback) {
 					block.appendChild(fallback);
 				}

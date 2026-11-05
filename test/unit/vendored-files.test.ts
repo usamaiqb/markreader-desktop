@@ -26,8 +26,8 @@
  *  and the three properties that genuinely deviate are logical-property overrides in
  *  `document-overrides.css`.
  *
- *  The upstream diff was last run against `microsoft/vscode` `main` at `57b4202903e`
- *  (2026-10-02): all of them are byte-identical to it, so the hashes below are upstream's own.
+ *  The upstream diff was last run against `microsoft/vscode` `main` at `aa078fca7d0`
+ *  (2026-11-05): all of them are byte-identical to it, so the hashes below are upstream's own.
  *
  *  Raw bytes are hashed rather than normalized text, which `.gitattributes` makes safe: it
  *  pins `eol=lf` for exactly these files, since a Windows clone would otherwise get CRLF and
@@ -78,8 +78,14 @@ const VENDORED: readonly VendoredFile[] = [
 	{
 		path: 'src/renderer/mermaid/vsCodeTheme.ts',
 		origin: 'extensions/mermaid-markdown-features/preview-src/shared/vsCodeTheme.ts',
-		bytes: 9523,
-		sha256: 'ced57079d15522367bf8ddb45c2a1c59ddd777c6b9ba9c501b6ffce823441989',
+		bytes: 9655,
+		sha256: '61dccb63c90341d202257f105dfca31c7ab4eaa88086a4c2bbcf64c6fd710d41',
+	},
+	{
+		path: 'src/renderer/mermaid/subgraphTitles.ts',
+		origin: 'extensions/mermaid-markdown-features/preview-src/shared/subgraphTitles.ts',
+		bytes: 27747,
+		sha256: '2641e89c4d375ca5f6b83f9d4f0cc7aaf5d57d3a1e0b187f2e03760632c17fa8',
 	},
 	{
 		path: 'src/renderer/mermaid/config.ts',
