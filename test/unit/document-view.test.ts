@@ -13,7 +13,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DocumentView } from '../../src/renderer/document';
+import { DocumentView, type FindState } from '../../src/renderer/document';
 import type { DocumentHost } from '../../src/renderer/host';
 
 const host: DocumentHost = {
@@ -251,5 +251,82 @@ describe('a restore still waiting for its frame', () => {
 		frames.restore();
 
 		expect(scrollTo).toHaveBeenLastCalledWith({ top: 300 });
+	});
+});
+
+describe('find', () => {
+	/**
+	 * jsdom has no CSS Custom Highlight API, and no layout for revealing a match: a `Set` per
+	 * highlight and an all-zero rectangle are all the view needs.
+	 */
+	function withHighlights(): { registry: Map<string, Set<AbstractRange>>; restore: () => void } {
+		const registry = new Map<string, Set<AbstractRange>>();
+		const globals = globalThis as unknown as { Highlight?: unknown };
+		const css = CSS as unknown as { highlights?: unknown };
+		globals.Highlight = class extends Set<AbstractRange> {};
+		css.highlights = registry;
+		const range = Range.prototype as Partial<Range>;
+		range.getBoundingClientRect = () => ({ top: 0 } as DOMRect);
+		return {
+			registry,
+			restore: () => {
+				delete globals.Highlight;
+				delete css.highlights;
+				delete range.getBoundingClientRect;
+			},
+		};
+	}
+
+	async function showText(view: DocumentView, text: string): Promise<void> {
+		const rendered = new Promise<void>(resolve => {
+			const off = view.on('headings', headings => {
+				if (headings.length) {
+					off();
+					resolve();
+				}
+			});
+		});
+		view.setDocument({ path: '/docs/find.md', text: `# Find\n\n${text}\n` }, { preserveScroll: false });
+		await rendered;
+	}
+
+	it('paints a match count too large to spread into one call', async () => {
+		const { view } = fixture();
+		const { registry, restore } = withHighlights();
+		// Enough matches that `new Highlight(...matches)` overflows the stack.
+		await showText(view, 's '.repeat(200_000));
+		const states: FindState[] = [];
+		view.on('find', state => states.push(state));
+
+		expect(() => view.runFind('s')).not.toThrow();
+
+		expect(states.at(-1)).toMatchObject({ index: 0, total: 200_000 });
+		expect(registry.get('mr-find-current')?.size).toBe(1);
+		expect(registry.get('mr-find-match')?.size).toBe(199_999);
+		restore();
+	});
+
+	it('moves only the current match between the highlights on a step', async () => {
+		const { view } = fixture();
+		const { registry, restore } = withHighlights();
+		await showText(view, 'one two one three one');
+		view.runFind('one');
+		const others = registry.get('mr-find-match')!;
+		const current = registry.get('mr-find-current')!;
+		const [first] = current;
+
+		view.stepFind(1);
+
+		// The same registered highlights, updated in place rather than rebuilt.
+		expect(registry.get('mr-find-match')).toBe(others);
+		expect(registry.get('mr-find-current')).toBe(current);
+		expect(current.size).toBe(1);
+		expect(current.has(first)).toBe(false);
+		expect(others.has(first)).toBe(true);
+		expect(others.size).toBe(2);
+
+		view.stepFind(-1);
+		expect([...current]).toEqual([first]);
+		restore();
 	});
 });

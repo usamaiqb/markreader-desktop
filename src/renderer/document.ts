@@ -148,6 +148,11 @@ export class DocumentView {
 	private pendingFragment: { readonly path: string; readonly slug: string } | undefined;
 
 	private findMatches: Range[] = [];
+	/**
+	 * The two registered highlights, kept so a step moves one match between them instead of
+	 * rebuilding either: every match but the current one, and the current one.
+	 */
+	private findPaint: { readonly others: Highlight; readonly current: Highlight } | undefined;
 	private findIndex = 0;
 	private findQuery = '';
 	private findActive = false;
@@ -721,8 +726,9 @@ export class DocumentView {
 		if (!this.findMatches.length) {
 			return;
 		}
+		const previous = this.findIndex;
 		this.findIndex = (this.findIndex + delta + this.findMatches.length) % this.findMatches.length;
-		this.paintFindHighlights();
+		this.moveCurrentHighlight(previous, this.findIndex);
 		this.emitFindState();
 		this.scrollToFindMatch(this.findIndex);
 	}
@@ -735,17 +741,41 @@ export class DocumentView {
 		});
 	}
 
+	/**
+	 * Added one at a time, never spread into `new Highlight(...)`: a spread passes every match as
+	 * an argument, and a one-letter query in a large document has enough of them to overflow the
+	 * stack, which threw out of `runFind` before it reported a count or painted anything.
+	 */
 	private paintFindHighlights(): void {
 		if (!('highlights' in CSS)) {
 			return;
 		}
-		const all = this.findMatches.filter((_, i) => i !== this.findIndex);
-		const current = this.findMatches[this.findIndex];
-		CSS.highlights.set('mr-find-match', new Highlight(...all));
-		CSS.highlights.set('mr-find-current', new Highlight(...(current ? [current] : [])));
+		const others = new Highlight();
+		const current = new Highlight();
+		for (const [index, match] of this.findMatches.entries()) {
+			(index === this.findIndex ? current : others).add(match);
+		}
+		CSS.highlights.set('mr-find-match', others);
+		CSS.highlights.set('mr-find-current', current);
+		this.findPaint = { others, current };
+	}
+
+	/** A step changes two matches' paint, whatever the total. */
+	private moveCurrentHighlight(from: number, to: number): void {
+		const paint = this.findPaint;
+		const previous = this.findMatches[from];
+		const next = this.findMatches[to];
+		if (!paint || !previous || !next) {
+			return;
+		}
+		paint.current.delete(previous);
+		paint.others.add(previous);
+		paint.others.delete(next);
+		paint.current.add(next);
 	}
 
 	private clearFindHighlights(): void {
+		this.findPaint = undefined;
 		if ('highlights' in CSS) {
 			CSS.highlights.delete('mr-find-match');
 			CSS.highlights.delete('mr-find-current');
