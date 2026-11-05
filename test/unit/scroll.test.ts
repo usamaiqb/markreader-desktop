@@ -79,3 +79,35 @@ describe('an element', () => {
 		expect(listener).toHaveBeenCalledOnce();
 	});
 });
+
+describe('a covered top', () => {
+	it('is nothing until the host says otherwise', () => {
+		expect(scrollAreaOf(undefined).coveredTop).toBe(0);
+	});
+
+	it('measures from below it, on the window', () => {
+		const area = scrollAreaOf(undefined);
+		area.coveredTop = 115;
+		expect(area.fromTop(150)).toBe(35);
+		expect(area.height).toBe(window.innerHeight - 115);
+	});
+
+	it('measures from below it, on an element', () => {
+		const element = document.createElement('div');
+		element.getBoundingClientRect = () => ({ top: 38 } as DOMRect);
+		Object.defineProperty(element, 'clientHeight', { value: 600 });
+		const area = scrollAreaOf(element);
+		area.coveredTop = 20;
+		expect(area.fromTop(128)).toBe(70);
+		expect(area.height).toBe(580);
+	});
+
+	it('takes a negative or non-finite amount as nothing', () => {
+		const area = scrollAreaOf(undefined);
+		for (const px of [-10, Number.NaN, Number.POSITIVE_INFINITY]) {
+			area.coveredTop = 40;
+			area.coveredTop = px;
+			expect(area.coveredTop).toBe(0);
+		}
+	});
+});
