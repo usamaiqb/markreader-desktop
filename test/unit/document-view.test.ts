@@ -169,3 +169,87 @@ describe('a covered top', () => {
 		expect(scrollTo).toHaveBeenLastCalledWith({ top: 267, behavior: 'smooth' });
 	});
 });
+
+describe('a restore still waiting for its frame', () => {
+	/** Animation frames run only when `flush` is called, so a reload can land before one. */
+	function holdFrames(): { flush: () => void; restore: () => void } {
+		const frames: FrameRequestCallback[] = [];
+		const spy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+			frames.push(callback);
+			return frames.length;
+		});
+		return {
+			flush: () => {
+				while (frames.length) {
+					frames.shift()!(0);
+				}
+			},
+			restore: () => spy.mockRestore(),
+		};
+	}
+
+	/** Resolves once `view` has rendered a document with headings. */
+	function rendered(view: DocumentView): Promise<void> {
+		return new Promise(resolve => {
+			const off = view.on('headings', headings => {
+				if (headings.length) {
+					off();
+					resolve();
+				}
+			});
+		});
+	}
+
+	const A = { path: '/docs/a.md', text: TEXT };
+	const B = { path: '/docs/b.md', text: TEXT };
+
+	it('is kept by a live reload that lands first', async () => {
+		const { view, scrollTo } = fixture();
+		const frames = holdFrames();
+
+		let done = rendered(view);
+		view.setDocument(A, { preserveScroll: false, viewState: { scrollTop: 300 } });
+		await done;
+		// The file changed on disk before the restore's frame: the scroller still reads 0.
+		done = rendered(view);
+		view.setDocument(A, { preserveScroll: true });
+		await done;
+		frames.flush();
+		frames.restore();
+
+		expect(scrollTo.mock.calls).toEqual([[{ top: 300 }]]);
+	});
+
+	it('is what the view state reports', async () => {
+		const { view } = fixture();
+		const frames = holdFrames();
+
+		const done = rendered(view);
+		view.setDocument(A, { preserveScroll: false, viewState: { scrollTop: 300 } });
+		await done;
+		expect(view.getViewState()).toEqual({ scrollTop: 300 });
+		frames.restore();
+	});
+
+	it('is what is remembered when another document replaces it first', async () => {
+		const { view, scrollTo } = fixture();
+		const frames = holdFrames();
+
+		let done = rendered(view);
+		view.setDocument(A, { preserveScroll: false, viewState: { scrollTop: 300 } });
+		await done;
+		done = rendered(view);
+		view.setDocument(B, { preserveScroll: false });
+		await done;
+		frames.flush();
+		expect(scrollTo).toHaveBeenLastCalledWith({ top: 0 });
+
+		done = rendered(view);
+		view.setDocument(A, { preserveScroll: false });
+		await done;
+		frames.flush();
+		frames.restore();
+
+		expect(scrollTo).toHaveBeenLastCalledWith({ top: 300 });
+	});
+});
