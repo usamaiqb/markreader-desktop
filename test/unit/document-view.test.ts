@@ -256,17 +256,24 @@ describe('a restore still waiting for its frame', () => {
 
 describe('find', () => {
 	/**
-	 * jsdom has no CSS Custom Highlight API, and no layout for revealing a match: a `Set` per
-	 * highlight and an all-zero rectangle are all the view needs.
+	 * jsdom has no CSS Custom Highlight API and no layout. A `Set` per highlight stands in for the
+	 * first; for the second, a match is as far down the scroller as the paragraph it is in, from
+	 * `tops`, and the scroller shows 600px.
 	 */
-	function withHighlights(): { registry: Map<string, Set<AbstractRange>>; restore: () => void } {
+	function withHighlights(
+		tops: readonly number[] = [],
+	): { registry: Map<string, Set<AbstractRange>>; restore: () => void } {
 		const registry = new Map<string, Set<AbstractRange>>();
 		const globals = globalThis as unknown as { Highlight?: unknown };
 		const css = CSS as unknown as { highlights?: unknown };
 		globals.Highlight = class extends Set<AbstractRange> {};
 		css.highlights = registry;
 		const range = Range.prototype as Partial<Range>;
-		range.getBoundingClientRect = () => ({ top: 0 } as DOMRect);
+		range.getBoundingClientRect = function (this: Range) {
+			const paragraph = this.startContainer.parentElement!.closest('p');
+			const index = [...document.querySelectorAll('#markdown-body p')].indexOf(paragraph!);
+			return { top: tops[index] ?? 0, height: 20 } as DOMRect;
+		};
 		return {
 			registry,
 			restore: () => {
@@ -288,6 +295,24 @@ describe('find', () => {
 		});
 		view.setDocument({ path: '/docs/find.md', text: `# Find\n\n${text}\n` }, { preserveScroll: false });
 		await rendered;
+		// Let the frame that positions a new document pass, so it is not mistaken for find's.
+		await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+	}
+
+	/** Four paragraphs saying "one": two scrolled past, one in view, one below the view. */
+	const FOUR = 'one\n\none\n\none\n\none';
+	const TOPS = [-900, -300, 50, 800];
+
+	async function scrolledFixture(tops: readonly number[] = TOPS) {
+		const f = fixture();
+		Object.defineProperty(f.scroller, 'clientHeight', { value: 600 });
+		f.scroller.scrollTop = 1000;
+		const highlights = withHighlights(tops);
+		await showText(f.view, FOUR);
+		f.scrollTo.mockClear();
+		const states: FindState[] = [];
+		f.view.on('find', state => states.push(state));
+		return { ...f, ...highlights, states };
 	}
 
 	it('paints a match count too large to spread into one call', async () => {
@@ -306,15 +331,61 @@ describe('find', () => {
 		restore();
 	});
 
+	it('marks the nearest match as current while typing, and does not scroll', async () => {
+		const { view, scrollTo, states, restore } = await scrolledFixture();
+
+		view.runFind('o');
+		view.runFind('on');
+		view.runFind('one');
+
+		expect(states.at(-1)).toEqual({ query: 'one', index: 2, total: 4 });
+		expect(scrollTo).not.toHaveBeenCalled();
+		restore();
+	});
+
+	it('goes to the nearest match on the first step, without scrolling to one in view', async () => {
+		const { view, scrollTo, states, restore } = await scrolledFixture();
+		view.runFind('one');
+
+		view.stepFind(1);
+		expect(states.at(-1)?.index).toBe(2);
+		expect(scrollTo).not.toHaveBeenCalled();
+
+		// The next is below the view: centred.
+		view.stepFind(1);
+		expect(states.at(-1)?.index).toBe(3);
+		expect(scrollTo).toHaveBeenLastCalledWith({ top: 1000 + 800 - 300, behavior: 'smooth' });
+		restore();
+	});
+
+	it('goes to the match before the nearest on a first step back', async () => {
+		const { view, scrollTo, states, restore } = await scrolledFixture();
+		view.runFind('one');
+
+		view.stepFind(-1);
+
+		expect(states.at(-1)?.index).toBe(1);
+		expect(scrollTo).toHaveBeenLastCalledWith({ top: 1000 - 300 - 300, behavior: 'smooth' });
+		restore();
+	});
+
+	it('wraps to the first match when the reader is past them all', async () => {
+		const { view, states, restore } = await scrolledFixture([-900, -700, -500, -300]);
+
+		view.runFind('one');
+
+		expect(states.at(-1)?.index).toBe(0);
+		restore();
+	});
+
 	it('moves only the current match between the highlights on a step', async () => {
-		const { view } = fixture();
-		const { registry, restore } = withHighlights();
-		await showText(view, 'one two one three one');
+		const { view, registry, restore } = await scrolledFixture([100, 200, 300, 400]);
 		view.runFind('one');
 		const others = registry.get('mr-find-match')!;
 		const current = registry.get('mr-find-current')!;
 		const [first] = current;
 
+		view.stepFind(1); // onto the nearest, which is already current
 		view.stepFind(1);
 
 		// The same registered highlights, updated in place rather than rebuilt.
@@ -323,7 +394,7 @@ describe('find', () => {
 		expect(current.size).toBe(1);
 		expect(current.has(first)).toBe(false);
 		expect(others.has(first)).toBe(true);
-		expect(others.size).toBe(2);
+		expect(others.size).toBe(3);
 
 		view.stepFind(-1);
 		expect([...current]).toEqual([first]);

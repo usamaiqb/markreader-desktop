@@ -154,6 +154,12 @@ export class DocumentView {
 	 */
 	private findPaint: { readonly others: Highlight; readonly current: Highlight } | undefined;
 	private findIndex = 0;
+	/**
+	 * Whether the reader has moved to a match since the query last changed. Until they have, the
+	 * current match is only the nearest one marked, and the first step goes *to* it rather than
+	 * past it.
+	 */
+	private findStepped = false;
 	private findQuery = '';
 	private findActive = false;
 
@@ -677,6 +683,13 @@ export class DocumentView {
 	/**
 	 * Uses the CSS Custom Highlight API, so matches are painted without mutating the DOM —
 	 * the same approach VS Code's preview uses for inner diff ranges.
+	 *
+	 * **It does not scroll.** It paints every match, counts them and marks the nearest one, the
+	 * first at or below the top of what is visible, as current — and leaves the reader where
+	 * they are. Moving is `stepFind`'s, which the host calls for Enter and for next / previous.
+	 * This is VS Code's editor find with `editor.find.cursorMoveOnType` off, the reading position
+	 * standing in for the cursor: a query typed, or re-run by a live reload, never costs the
+	 * reader their place.
 	 */
 	runFind(query: string): void {
 		this.findActive = true;
@@ -684,6 +697,7 @@ export class DocumentView {
 		this.clearFindHighlights();
 		this.findMatches = [];
 		this.findIndex = 0;
+		this.findStepped = false;
 
 		if (query.length < 1) {
 			this.emitFindState();
@@ -715,22 +729,52 @@ export class DocumentView {
 			}
 		}
 
+		this.findIndex = this.nearestFindMatch();
 		this.paintFindHighlights();
 		this.emitFindState();
-		if (this.findMatches.length) {
-			this.scrollToFindMatch(0);
-		}
 	}
 
+	/**
+	 * Moves to a match, scrolling only if it is not already in view.
+	 *
+	 * The first step after a query goes from where the reader is *now* — they may have scrolled
+	 * since typing — and lands on the nearest match going forward, or the one before it going
+	 * back. Later steps go `delta` matches on from the current one, wrapping at either end.
+	 */
 	stepFind(delta: number): void {
-		if (!this.findMatches.length) {
+		const count = this.findMatches.length;
+		if (!count || !delta) {
 			return;
 		}
 		const previous = this.findIndex;
-		this.findIndex = (this.findIndex + delta + this.findMatches.length) % this.findMatches.length;
+		const from = this.findStepped ? this.findIndex + delta : this.nearestFindMatch() + (delta > 0 ? delta - 1 : delta);
+		this.findIndex = ((from % count) + count) % count;
+		this.findStepped = true;
 		this.moveCurrentHighlight(previous, this.findIndex);
 		this.emitFindState();
-		this.scrollToFindMatch(this.findIndex);
+		this.revealFindMatch(this.findIndex);
+	}
+
+	/**
+	 * The first match whose top is at or below the visible top, or the first match when the
+	 * reader is past them all.
+	 *
+	 * Matches are in document order, which is top-to-bottom order for everything but cells side
+	 * by side in a row, so this is a binary search: a handful of measurements rather than one per
+	 * match, which matters for a one-letter query.
+	 */
+	private nearestFindMatch(): number {
+		let low = 0;
+		let high = this.findMatches.length;
+		while (low < high) {
+			const mid = (low + high) >>> 1;
+			if (this.scroll.fromTop(this.findMatches[mid].getBoundingClientRect().top) < 0) {
+				low = mid + 1;
+			} else {
+				high = mid;
+			}
+		}
+		return low < this.findMatches.length ? low : 0;
 	}
 
 	private emitFindState(): void {
@@ -782,14 +826,18 @@ export class DocumentView {
 		}
 	}
 
-	private scrollToFindMatch(index: number): void {
+	/** Centres a match that is out of view, and leaves one in view where it is. */
+	private revealFindMatch(index: number): void {
 		const range = this.findMatches[index];
 		if (!range) {
 			return;
 		}
 		const rect = range.getBoundingClientRect();
-		const top = this.scroll.scrollTop + this.scroll.fromTop(rect.top) - this.scroll.height / 2;
-		this.scroll.scrollTo(Math.max(0, top), 'smooth');
+		const top = this.scroll.fromTop(rect.top);
+		if (top >= 0 && top + rect.height <= this.scroll.height) {
+			return;
+		}
+		this.scroll.scrollTo(Math.max(0, this.scroll.scrollTop + top - this.scroll.height / 2), 'smooth');
 	}
 
 	// ------------------------------------------------------------------- link handling
