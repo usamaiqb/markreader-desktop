@@ -161,6 +161,14 @@ export class DocumentView {
 
 	private scrollRaf = 0;
 
+	/**
+	 * A scroll position set for the next frame and not yet applied. A document is positioned a
+	 * frame after it renders, once it has laid out; until then the scroll area still reads where
+	 * the last document left it, and anything asking where the reader is must get this instead.
+	 * See `readingPosition()`.
+	 */
+	private pendingScroll: { readonly top: number } | undefined;
+
 	private readonly listeners = new Map<string, Set<(payload: never) => void>>();
 
 	private readonly systemDark = window.matchMedia('(prefers-color-scheme: dark)');
@@ -219,7 +227,7 @@ export class DocumentView {
 
 	/** Where the reader is in the showing document; see `SetDocumentOptions.viewState`. */
 	getViewState(): DocumentViewState {
-		return { scrollTop: this.scroll.scrollTop };
+		return { scrollTop: this.readingPosition() };
 	}
 
 	/**
@@ -264,7 +272,7 @@ export class DocumentView {
 			this.engine = new MarkdownItEngine(getPlugins());
 		}
 
-		const previousScroll = this.scroll.scrollTop;
+		const previousScroll = this.readingPosition();
 		const isSameDoc = this.doc !== undefined && samePath(this.doc.path, doc.path);
 
 		if (this.doc && !isSameDoc) {
@@ -278,6 +286,8 @@ export class DocumentView {
 		if (this.pendingFragment && samePath(this.pendingFragment.path, doc.path)) {
 			const { slug } = this.pendingFragment;
 			this.pendingFragment = undefined;
+			// The fragment decides where this document lands; an older restore must not undo it.
+			this.pendingScroll = undefined;
 			requestAnimationFrame(() => this.revealSlug(slug));
 			return;
 		}
@@ -291,7 +301,7 @@ export class DocumentView {
 		} else {
 			top = this.scrollMemory.get(doc.path) ?? 0;
 		}
-		requestAnimationFrame(() => this.scroll.scrollTo(top));
+		this.scrollNextFrame(top);
 	}
 
 	/**
@@ -301,14 +311,37 @@ export class DocumentView {
 	clearDocument(): void {
 		++this.documentSeq;
 		if (this.doc) {
-			this.scrollMemory.set(this.doc.path, this.scroll.scrollTop);
+			this.scrollMemory.set(this.doc.path, this.readingPosition());
 		}
+		this.pendingScroll = undefined;
 		this.doc = undefined;
 		this.pendingFragment = undefined;
 		this.emit('document', undefined);
 		this.render();
 		// `render()` skips this with nothing to render; an open find bar would keep its old count.
 		this.refreshFind();
+	}
+
+	/**
+	 * Where the reader is: the position about to be applied, if there is one, else the scroll
+	 * area's own. Without this, a live reload landing between a restore and its frame read the
+	 * old position (often 0) as the one to keep, and undid the restore.
+	 */
+	private readingPosition(): number {
+		return this.pendingScroll?.top ?? this.scroll.scrollTop;
+	}
+
+	/** Only the latest request applies: a newer one supersedes any still waiting. */
+	private scrollNextFrame(top: number): void {
+		const pending = { top };
+		this.pendingScroll = pending;
+		requestAnimationFrame(() => {
+			if (this.pendingScroll !== pending) {
+				return;
+			}
+			this.pendingScroll = undefined;
+			this.scroll.scrollTo(top);
+		});
 	}
 
 	/** Re-read the showing document from the host and re-render it in place. */
