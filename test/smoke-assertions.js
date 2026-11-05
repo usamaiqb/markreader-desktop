@@ -131,6 +131,15 @@
 			imageLoaded && imageLoaded.w > 0,
 			JSON.stringify(imageLoaded));
 
+		// A raw HTML <img> never passes through the engine's image rule; the sanitizer rewrites it.
+		const htmlImageLoaded = await waitFor('raw HTML <img> to load', () => {
+			const img = document.querySelector('#markdown-body img[alt="Raw HTML badge"]');
+			return img && img.complete && img.naturalWidth > 0 ? { w: img.naturalWidth, src: img.getAttribute('src') } : null;
+		}).catch(() => null);
+		check('raw HTML <img> loaded over mdr://',
+			htmlImageLoaded && htmlImageLoaded.w > 0 && isMdr(htmlImageLoaded.src),
+			JSON.stringify(htmlImageLoaded));
+
 		// The sample also points at a file that isn't there: that must 404, not hang.
 		const missing = Array.from(document.querySelectorAll('#markdown-body img'))
 			.find(i => i.getAttribute('data-src')?.includes('does-not-exist'));

@@ -17,6 +17,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { sanitizeDocumentHtml } from '../../src/renderer/sanitizer';
+import { MarkdownItEngine } from '../../src/renderer/engine';
+import { getPlugins } from '../../src/renderer/plugins';
 
 describe('what the sanitizer removes', () => {
 	it('strips an inline event handler', () => {
@@ -129,5 +131,58 @@ describe('what the sanitizer keeps', () => {
 		const html = sanitizeDocumentHtml('<table class="frontmatter" dir="auto"><tr><td>a</td></tr></table>');
 		expect(html).toContain('frontmatter');
 		expect(html).toContain('dir="auto"');
+	});
+});
+
+describe('local resources in raw HTML', () => {
+	// A stand-in for the engine's resolver: relative references resolve beside the document.
+	const resolve = (href: string) => (/^[a-z][a-z0-9+.-]*:/i.test(href) ? href : `mdr://localhost/C%3A/docs/${href}`);
+
+	it('rewrites a relative <img src> and keeps the original in data-src', () => {
+		const html = sanitizeDocumentHtml('<p align="center"><img src="shots/a.png" width="800"></p>', resolve);
+		expect(html).toContain('src="mdr://localhost/C%3A/docs/shots/a.png"');
+		expect(html).toContain('data-src="shots/a.png"');
+		expect(html).toContain('width="800"');
+	});
+
+	it('rewrites every candidate of a <picture> srcset', () => {
+		const html = sanitizeDocumentHtml(
+			'<picture><source media="(prefers-color-scheme: dark)" srcset="dark.png 1x, dark@2x.png 2x"><img src="light.png"></picture>',
+			resolve,
+		);
+		expect(html).toContain('srcset="mdr://localhost/C%3A/docs/dark.png 1x, mdr://localhost/C%3A/docs/dark@2x.png 2x"');
+		expect(html).toContain('src="mdr://localhost/C%3A/docs/light.png"');
+	});
+
+	it('rewrites video src and poster', () => {
+		const html = sanitizeDocumentHtml('<video src="clip.mp4" poster="poster.png"></video>', resolve);
+		expect(html).toContain('src="mdr://localhost/C%3A/docs/clip.mp4"');
+		expect(html).toContain('poster="mdr://localhost/C%3A/docs/poster.png"');
+	});
+
+	it('leaves remote images alone', () => {
+		const html = sanitizeDocumentHtml('<img src="https://img.shields.io/badge/x-y-blue">', resolve);
+		expect(html).toContain('src="https://img.shields.io/badge/x-y-blue"');
+		expect(html).not.toContain('data-src');
+	});
+
+	it('does not rewrite an image the engine already rewrote', () => {
+		const html = sanitizeDocumentHtml('<img src="mdr://localhost/C%3A/docs/a.png" data-src="a.png">', () => 'wrong');
+		expect(html).toContain('src="mdr://localhost/C%3A/docs/a.png"');
+	});
+
+	it('rewrites nothing without a resolver, and the next call does not inherit one', () => {
+		sanitizeDocumentHtml('<img src="a.png">', resolve);
+		expect(sanitizeDocumentHtml('<img src="a.png">')).toContain('src="a.png"');
+	});
+
+	it('resolves raw HTML images against the document, end to end through the engine', () => {
+		const output = new MarkdownItEngine(getPlugins()).render(
+			'<img src="metadata/screenshots/01.png">\n\n![md](./images/photo.png)',
+			{ documentPath: 'C:/repo/README.md' },
+		);
+		const html = sanitizeDocumentHtml(output.html, output.resolveResource);
+		expect(html).toMatch(/src="(mdr:\/\/localhost|http:\/\/mdr\.localhost)\/C%3A\/repo\/metadata\/screenshots\/01\.png"/);
+		expect(html).toMatch(/src="(mdr:\/\/localhost|http:\/\/mdr\.localhost)\/C%3A\/repo\/images\/photo\.png"/);
 	});
 });

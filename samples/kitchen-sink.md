@@ -149,6 +149,10 @@ A relative image reference, resolved through the `mdr://` protocol:
 
 ![Test badge](./assets/badge.svg)
 
+The same image written as raw HTML, the way READMEs usually do it:
+
+<img src="assets/badge.svg" alt="Raw HTML badge">
+
 A missing image, which should simply not render:
 
 ![Missing](./assets/does-not-exist.png)

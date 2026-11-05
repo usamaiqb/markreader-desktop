@@ -396,7 +396,7 @@ export class DocumentView {
 			rootPath: this.root_,
 		});
 
-		setDocumentHtml(this.root, output.html);
+		setDocumentHtml(this.root, output.html, output.resolveResource);
 
 		this.addHeadingAnchors();
 		this.addCodeBlockCopyButtons();
