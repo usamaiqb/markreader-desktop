@@ -128,25 +128,41 @@ Releases are tag-driven — pushing `vX.Y.Z` triggers `.github/workflows/release
 2. Re-tests the tagged commit, builds the Windows and Linux installers, and uploads them.
 3. Creates a GitHub Release with auto-generated notes grouped by label.
 
-To cut a release:
+The version bump goes through a PR like any other change, since `main` only accepts merges
+that pass the required checks. The tag goes on `main` after that PR merges.
 
 ```bash
-# 1. Bump the version everywhere (package.json is the source of truth)
+# 1. Start from an up-to-date main with a clean tree
+git checkout main && git pull origin main
+git checkout -b release/v0.1.1
+
+# 2. Set "version" in package.json (the source of truth), then copy it everywhere else.
+#    --fix can't write Cargo.lock and says so; the cargo command regenerates it.
 npm run check:version -- --fix
+(cd src-tauri && cargo update -p markreader)
 
-# 2. Regenerate Cargo.lock if Cargo.toml changed
-cd src-tauri && cargo build
-
-# 3. Verify
+# 3. Verify — must print "All versions match"
 npm run check:version
 
-# 4. Update CHANGELOG.md with the new version's entry, and add a matching
-#    <release> line to metadata/com.markreader.desktop.metainfo.xml
+# 4. Add the new version's entry at the top of CHANGELOG.md, and a matching
+#    <release version="0.1.1" date="YYYY-MM-DD"/> as the first line inside <releases> in
+#    metadata/com.markreader.desktop.metainfo.xml (newest first)
 
-# 5. Commit, tag, push
-git add -A && git commit -m "chore: release v0.1.1"
-git tag v0.1.1 && git push origin main --tags
+# 5. Commit only the release files, push, and open a PR titled "chore(release): v0.1.1"
+git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock \
+        src-tauri/tauri.conf.json CHANGELOG.md metadata/com.markreader.desktop.metainfo.xml
+git commit -m "chore(release): v0.1.1"
+git push -u origin release/v0.1.1
+
+# 6. After the PR merges, tag main — pushing the tag starts the release workflow
+git checkout main && git pull origin main
+npm run check:version
+git tag -a v0.1.1 -m "Release v0.1.1"
+git push origin v0.1.1
 ```
+
+GitHub Release notes are generated from PR labels (`.github/release.yml`), so `CHANGELOG.md`
+is the only release text to write by hand.
 
 > Note: there is no separate `versionCode` to bump — this is not an Android project — so the
 > version-sync check takes that role.
