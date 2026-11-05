@@ -84,6 +84,13 @@ export interface RenderOutput {
 	readonly html: string;
 	readonly containingImages: Set<string>;
 	readonly headings: readonly HeadingInfo[];
+	/**
+	 * Rewrites a reference the way the engine rewrote the document's own `![]()` images — a
+	 * relative or `file:` reference becomes a resource URL, anything else is returned as is.
+	 * Raw HTML (`<img src>`, `<picture><source srcset>`) never passes through a markdown-it
+	 * image rule, so the sanitizer applies this to it while it already has the DOM parsed.
+	 */
+	readonly resolveResource: (href: string) => string;
 }
 
 /** Where the document lives, so relative links and images can be resolved. */
@@ -177,6 +184,7 @@ export class MarkdownItEngine {
 			html,
 			containingImages: env.containingImages,
 			headings: env.headings,
+			resolveResource: href => this.#toResourceUri(href, context),
 		};
 	}
 
@@ -333,7 +341,7 @@ export class MarkdownItEngine {
 	 * Replaces the original `#toResourceUri`, which produced webview URIs.
 	 * Here local references become `mdr://` URLs served by the host.
 	 */
-	#toResourceUri(href: string, env: RenderEnv | undefined): string {
+	#toResourceUri(href: string, env: RenderContext | undefined): string {
 		try {
 			if (href.startsWith('data:') || href.startsWith('mdr:')) {
 				return href;
@@ -359,7 +367,7 @@ export class MarkdownItEngine {
 	}
 
 	/** Resolve a document-relative or root-absolute reference to an absolute fs path. */
-	#resolveLocalPath(href: string, env: RenderEnv | undefined): string | undefined {
+	#resolveLocalPath(href: string, env: RenderContext | undefined): string | undefined {
 		// Without an env there is no document and no root to resolve against, so a relative
 		// reference has no answer — leave it as the document wrote it.
 		if (!href || !env) {
