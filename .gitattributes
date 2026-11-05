@@ -8,7 +8,7 @@
 #   src/renderer/css/highlight.css
 #   src/renderer/slugify.ts
 #   src/renderer/markdown-language-features/util/dom.ts
-#   src/renderer/mermaid/vsCodeTheme.ts, config.ts, disposable.ts
+#   src/renderer/mermaid/vsCodeTheme.ts, subgraphTitles.ts, config.ts, disposable.ts
 #
 # Those are kept verbatim so they can be re-diffed against the vscode repo — see
 # licenses/NOTICE.md. Local deviations belong in a separate overrides file.
