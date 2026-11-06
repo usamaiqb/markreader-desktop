@@ -232,7 +232,7 @@ async function checkItRenders() {
 		highlighted: body.querySelectorAll('pre code .hljs-keyword, pre code .hljs-string').length,
 		katex: body.querySelectorAll('.katex').length,
 		tables: body.querySelectorAll('.table-wrapper > table').length,
-		anchors: body.querySelectorAll('.heading-anchor').length,
+		copyButtons: body.querySelectorAll('.code-block-copy-button').length,
 		mermaid: body.querySelectorAll('.mermaid-block').length,
 	};
 
@@ -241,7 +241,7 @@ async function checkItRenders() {
 	check('highlight.js loaded and highlighted', counts.highlighted > 5, `${counts.highlighted} tokens`);
 	check('KaTeX loaded and rendered math', counts.katex >= 3, `${counts.katex} nodes`);
 	check('the document module added its own affordances',
-		counts.anchors >= 15 && counts.mermaid === 3, JSON.stringify(counts));
+		counts.copyButtons >= 3 && counts.mermaid === 3, JSON.stringify(counts));
 	check('no script survived the sanitizer', !body.innerHTML.includes('<script'));
 }
 

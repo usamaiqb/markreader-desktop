@@ -79,7 +79,6 @@
 				.filter(n => !n.closest('.katex-display')).length,
 			mermaidBlocks: document.querySelectorAll('#markdown-body .mermaid-block').length,
 			tocEntries: document.querySelectorAll('#toc-list .toc-entry').length,
-			anchors: document.querySelectorAll('#markdown-body .heading-anchor').length,
 			taskCheckboxes: document.querySelectorAll('#markdown-body input[type=checkbox]').length,
 			tables: document.querySelectorAll('#markdown-body .table-wrapper > table').length,
 			mdrImages: Array.from(document.querySelectorAll('#markdown-body img')).map(i => i.getAttribute('src')),
@@ -98,7 +97,6 @@
 		check('raw HTML passthrough works', counts.rawHtmlPassthrough);
 		check('task list checkboxes rendered', counts.taskCheckboxes === 4, `got ${counts.taskCheckboxes}`);
 		check('tables wrapped for overflow', counts.tables >= 1, `got ${counts.tables}`);
-		check('heading anchors added', counts.anchors >= 15, `got ${counts.anchors}`);
 		check('outline populated', counts.tocEntries >= 15, `got ${counts.tocEntries}`);
 
 		log('');
@@ -310,9 +308,7 @@
 			cls: document.body.className,
 			bg: getComputedStyle(document.body).backgroundColor,
 			codeBg: getComputedStyle(document.querySelector('#markdown-body pre')).backgroundColor,
-			// Skip .heading-anchor, which is deliberately styled as muted chrome.
-			linkColor: getComputedStyle(
-				document.querySelector('#markdown-body p a:not(.heading-anchor)')).color,
+			linkColor: getComputedStyle(document.querySelector('#markdown-body p a')).color,
 		};
 		check('light theme sets vscode-light', light.cls.includes('vscode-light'));
 		check('light theme background is light', light.bg === 'rgb(255, 255, 255)', light.bg);
