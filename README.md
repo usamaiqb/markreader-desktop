@@ -76,21 +76,9 @@ Open documents from the terminal — each file named gets a tab:
 
 A second launch doesn't start a second app — it hands its files to the running window, as new tabs.
 
-## Building from source
-
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full developer guide.
-
-```bash
-npm install
-npm start              # build the frontend, then launch the app
-```
-
-Requires the Rust toolchain, and on Windows the MSVC build tools and WebView2 runtime —
-`npx tauri info` checks all three.
-
 ## Project documentation
 
-- [CONTRIBUTING.md](.github/CONTRIBUTING.md) — setup, build, test, release process
+- [CONTRIBUTING.md](.github/CONTRIBUTING.md) — build from source, test, release
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the app is put together
 - [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) — platform-specific quirks and workarounds
 - [CHANGELOG.md](CHANGELOG.md) — release history

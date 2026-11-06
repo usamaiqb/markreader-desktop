@@ -132,6 +132,7 @@ pub fn start(app: &AppHandle) {
 	}
 
 	// If the script never reports — a hang or a thrown exception — fail rather than sit there.
+	// The watchdog starts here, so a page that never calls `frontend_ready` hangs with no output.
 	let handle = app.clone();
 	std::thread::spawn(move || {
 		std::thread::sleep(TIMEOUT);
