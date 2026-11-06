@@ -445,8 +445,8 @@ body.full-width #content {
 	max-width: none;
 }
 
-/* Heading anchors and the jump-target flash moved to document-overrides.css — they style
-   elements the document module creates, so a document-only host needs them too. */
+/* The jump-target flash moved to document-overrides.css — it styles elements the document
+   module marks, so a document-only host needs it too. */
 
 /* Empty state */
 
@@ -567,7 +567,6 @@ body.finding #find-bar {
 	#sidebar,
 	#outline,
 	#find-bar,
-	.heading-anchor,
 	.code-block-copy-button {
 		display: none !important;
 	}

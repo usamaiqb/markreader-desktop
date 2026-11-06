@@ -109,7 +109,7 @@ function rewriteSrcset(srcset: string, rewrite: (href: string) => string): strin
  *
  * The engine's own attributes have to survive: `data-line` for the source map, `data-href` and
  * `data-resolved-path` for link handling, `data-src` for the pre-rewrite original, and the
- * `id`s heading anchors and the outline navigate by. DOMPurify keeps `data-*` and `id` by
+ * `id`s that in-page links and the outline navigate by. DOMPurify keeps `data-*` and `id` by
  * default; the tests pin that.
  *
  * What it does *not* keep is any attribute whose value contains `-->`, an mXSS defence with no

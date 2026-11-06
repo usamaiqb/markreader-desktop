@@ -56,8 +56,8 @@ src/
       highlight.css      ← VS Code, verbatim
       theme.css          the --vscode-* variable shim
       document-overrides.css  every local deviation from the two verbatim files, plus the
-                              document's own rules — RTL, mobile, mermaid, KaTeX, anchors,
-                              find highlights
+                              document's own rules — RTL, mobile, mermaid, KaTeX, find
+                              highlights
       app.css            application chrome (desktop only)
 ```
 

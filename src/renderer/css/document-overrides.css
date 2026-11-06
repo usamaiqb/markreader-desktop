@@ -17,8 +17,8 @@
  *       section will keep growing. That is expected, not drift.
  *    2. MarkReader's own document-level rules. These were in `app.css`, which is the desktop
  *       chrome stylesheet — so a host loading only the document stylesheets got every mermaid
- *       diagram followed by its own source, and permanently visible heading anchors. They
- *       style elements `document.ts` creates, so they belong with the document.
+ *       diagram followed by its own source. They style elements `document.ts` creates, so
+ *       they belong with the document.
  *--------------------------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------------------------
@@ -62,31 +62,6 @@ th {
 /*---------------------------------------------------------------------------------------------
  *  2. MarkReader's document-level rules
  *--------------------------------------------------------------------------------------------*/
-
-/* Heading anchor links, in the style of the GitHub / docs convention. */
-.markdown-body :is(h1, h2, h3, h4, h5, h6) {
-	position: relative;
-}
-
-.heading-anchor {
-	position: absolute;
-	inset-inline-start: -0.85em;
-	width: 0.85em;
-	opacity: 0;
-	text-decoration: none;
-	color: var(--mr-description-foreground);
-	font-weight: 400;
-	cursor: pointer;
-}
-
-.markdown-body :is(h1, h2, h3, h4, h5, h6):hover > .heading-anchor {
-	opacity: 1;
-}
-
-.heading-anchor:hover {
-	text-decoration: none;
-	color: var(--vscode-textLink-foreground);
-}
 
 /* Briefly flash a heading that was jumped to, so the target is obvious. */
 @keyframes mr-target-flash {

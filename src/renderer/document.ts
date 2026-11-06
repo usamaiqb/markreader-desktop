@@ -398,7 +398,6 @@ export class DocumentView {
 
 		setDocumentHtml(this.root, output.html, output.resolveResource);
 
-		this.addHeadingAnchors();
 		this.addCodeBlockCopyButtons();
 		this.wrapWideTables();
 		void this.renderMermaidBlocks();
@@ -457,22 +456,6 @@ export class DocumentView {
 				});
 				pre.appendChild(button);
 			}
-		}
-	}
-
-	private addHeadingAnchors(): void {
-		const selector = 'h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]';
-		for (const heading of this.root.querySelectorAll<HTMLElement>(selector)) {
-			if (heading.querySelector('.heading-anchor')) {
-				continue;
-			}
-			const anchor = document.createElement('a');
-			anchor.className = 'heading-anchor';
-			anchor.href = `#${heading.id}`;
-			anchor.textContent = '#';
-			anchor.title = 'Link to this section';
-			anchor.setAttribute('aria-hidden', 'true');
-			heading.insertBefore(anchor, heading.firstChild);
 		}
 	}
 
@@ -708,7 +691,7 @@ export class DocumentView {
 		const walker = document.createTreeWalker(this.root, NodeFilter.SHOW_TEXT, {
 			acceptNode: node => {
 				const parent = node.parentElement;
-				if (!parent || parent.closest('.heading-anchor, .code-block-copy-button, script, style')) {
+				if (!parent || parent.closest('.code-block-copy-button, script, style')) {
 					return NodeFilter.FILTER_REJECT;
 				}
 				return node.nodeValue && node.nodeValue.trim().length > 0
