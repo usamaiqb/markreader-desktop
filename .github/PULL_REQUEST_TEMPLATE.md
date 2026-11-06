@@ -15,6 +15,5 @@ Closes #
 ## Checklist
 
 - [ ] PR title follows [Conventional Commits](https://www.conventionalcommits.org)
-- [ ] `npm test` and `npm run typecheck` pass locally
-- [ ] `npm run check:version` passes (all version files in sync)
+- [ ] The [checks in CONTRIBUTING.md](https://github.com/usamaiqb/markreader-desktop/blob/main/.github/CONTRIBUTING.md#checks) pass, including the ones for what this PR changes
 - [ ] UI changes include screenshots (if applicable)

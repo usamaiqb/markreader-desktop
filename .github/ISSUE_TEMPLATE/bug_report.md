@@ -25,9 +25,9 @@ A clear description of what actually happened.
 If applicable, add screenshots to help explain your problem.
 
 ## Environment
-- OS: [e.g. Windows 11, Ubuntu 24.04, macOS 14]
-- App Version: [e.g. 0.1.0]
-- Install Method: [installer / portable / built from source]
+- OS: [e.g. Windows 11, Ubuntu 24.04]
+- App Version: [e.g. 0.2.0]
+- Install Method: [.exe installer / .deb / AppImage / built from source]
 - How opened: [double-clicked .md / file picker / drag-and-drop / command line]
 
 ## Console / Log Output (if possible)

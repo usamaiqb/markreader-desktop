@@ -6,7 +6,7 @@
  *  chrome, and get out of the way.
  *
  *  This file used to be the whole renderer. It is split in two now — `document.ts` is the half
- *  an Android WebView will load, `shell.ts` is the half only this app has. The only reason
+ *  every host loads, `shell.ts` is the half only this app has. The only reason
  *  this third file exists is that something has to introduce them, and neither should know how
  *  the other was constructed.
  *--------------------------------------------------------------------------------------------*/

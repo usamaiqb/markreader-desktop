@@ -1,306 +1,121 @@
 # Architecture
 
-MarkReader is a standalone desktop Markdown reader. The rendering core is extracted from
-VS Code's Markdown preview (`extensions/markdown-language-features`) and cut loose from the
-`vscode` API; the shell is [Tauri](https://tauri.app) — a Rust backend plus the OS webview.
+MarkReader is a desktop Markdown reader. The renderer comes from VS Code's Markdown preview
+(`extensions/markdown-language-features`), with the `vscode` API removed. The app shell is
+[Tauri](https://tauri.app): a Rust backend and the OS webview.
+
+This page is a map. Each file's header comment explains the details.
 
 ## File layout
 
 ```
-src-tauri/               the backend (Rust)
-  src/
-    main.rs              window, app wiring, single instance, external links
-    commands.rs          the commands the frontend calls (dialogs, open, reveal, theme)
-    document.rs          reading a document, pushing it to the frontend, a window's open set
-                         (`sync_documents`), folder scans
-    protocol.rs          the mdr:// scheme, served from disk
-    watcher.rs           watches a window's open documents for saves, one watch per directory
-    tree.rs              collects markdown files for the sidebar
-    menu.rs              application menu; view state lives in the renderer
-    settings.rs          settings.json: read at start-up, written on every change
-    session.rs           session.json: the open tabs, restored at start-up
-    recent.rs            Windows recent-documents list
-    cli.rs               argv parsing: `markreader notes.md todo.md`
-    smoke.rs             the --smoke test hook
-  tauri.conf.json        window, bundle and file-association config
-  capabilities/          what the window is allowed to call
+src-tauri/src/           the backend (Rust)
+  main.rs                window, app wiring, single instance, external links
+  commands.rs            the commands the frontend calls
+  document.rs            reads documents, tracks a window's open set, scans folders
+  protocol.rs            the mdr:// scheme and its resource roots
+  watcher.rs             watches open documents for saves
+  tree.rs                collects Markdown files for the sidebar
+  menu.rs                application menu
+  settings.rs            settings.json
+  session.rs             session.json: the open tabs
+  recent.rs              Windows recent-documents list
+  cli.rs                 argv parsing
+  smoke.rs               the --smoke test hook
 
-src/
-  bridge/                the frontend half of the bridge
-    bridge.ts            installs window.markreader on top of invoke()/listen()
-    entry.ts             bridge, then renderer — bundled to out/renderer/renderer.js
-  renderer/              the document view (browser, no backend access)
-    engine.ts            ← markdownEngine.ts, de-vscoded
-    slugify.ts           ← slugify.ts, verbatim
-    frontMatter.ts       ← yamlPreamble.ts, de-vscoded
-    plugins.ts           ← markdown-math, plus a task-list plugin
-    highlight.ts         highlight.js core + the explicit list of languages that ship
-    host.ts              the host contract, and the path space contract with it
-    document.ts          DocumentView: links, find, outline, theming, mermaid — shareable
-    mermaid/             ← mermaid-markdown-features vsCodeTheme.ts and its two imports, verbatim
-    shell.ts             desktop chrome: file list, outline pane, find bar, menus
-    tabs/model.ts        a window's open tabs: order, active, preview, history — no DOM (desktop only)
-    tabs/strip.ts        draws the model as the tab strip, and routes its clicks back
-    renderer.ts          composition root: introduces the two
-    sanitizer.ts         the only place document HTML enters the DOM
-    lazy.ts              what a document needs (KaTeX, highlight.js) and loading only that
-    config.ts            replaces MarkdownPreviewConfiguration
-    paths.ts             browser-safe path helpers
-    scroll.ts            what a DocumentView scrolls: the window, or the element a host gives it
-    util.ts              mdr:// URI helpers
-    markdown-language-features/util/dom.ts  ← dom.ts, verbatim: the escaping helpers
-    vscode.ts            the `vscode` module, as far as the verbatim files use it
-    index.html           replaces MdDocumentRenderer.renderDocument()
-    css/
-      markdown.css       ← VS Code, verbatim
-      highlight.css      ← VS Code, verbatim
-      theme.css          the --vscode-* variable shim
-      document-overrides.css  every local deviation from the two verbatim files, plus the
-                              document's own rules — RTL, mobile, mermaid, KaTeX, find
-                              highlights
-      app.css            application chrome (desktop only)
+src/bridge/
+  bridge.ts              implements window.markreader with invoke() and listen()
+  entry.ts               loads the bridge, then the renderer
+
+src/renderer/            browser only, no backend access
+  host.ts                the host contract and the path contract
+  document.ts            DocumentView: the shared document module
+  shell.ts               the desktop shell: file list, outline, find bar, menus
+  tabs/                  the tab model and tab strip (desktop only)
+  renderer.ts            composition root: connects document.ts and shell.ts
+  engine.ts              ← markdownEngine.ts, de-vscoded
+  frontMatter.ts         ← yamlPreamble.ts, de-vscoded
+  slugify.ts             ← verbatim
+  mermaid/               ← vsCodeTheme.ts and its imports, verbatim
+  markdown-language-features/util/dom.ts  ← verbatim
+  vscode.ts              the parts of `vscode` that the verbatim files use
+  plugins.ts             math and task-list plugins
+  highlight.ts           highlight.js and the languages that ship
+  lazy.ts                loads only the libraries a document needs
+  sanitizer.ts           the only place document HTML enters the DOM
+  config.ts              settings shape and validation
+  paths.ts, util.ts      path and mdr:// URI helpers
+  scroll.ts              the scroll container
+  css/
+    markdown.css         ← VS Code, verbatim
+    highlight.css        ← VS Code, verbatim
+    theme.css            the --vscode-* variables, from Default Dark/Light Modern
+    document-overrides.css  local changes, and rules for what document.ts draws
+    app.css              desktop shell only
 ```
 
-`renderer/` is split so that a second host can load only part of it. `document.ts` owns
-everything inside the reading surface and touches no DOM outside its root; `shell.ts` owns the
-chrome and never reaches into the document. They meet through five events and the
-`DocumentHost` interface, so a second host can take the first and supply its own second. A
-prospective Android app is the candidate for that; nothing here depends on it yet.
+**Do not edit a file marked verbatim.** It must stay diffable against upstream VS Code. Put
+CSS changes in `document-overrides.css`, and code changes in the file that imports the verbatim
+file.
 
-Paths crossing that interface are **opaque to the renderer** — it does string maths on them
-and hands the result back, so a host is free to make a path mean whatever it likes. The
-contract is stated in full at the top of `renderer/host.ts` and enforced by
-`test/unit/opaque-paths.test.ts`, which runs the same cases over a POSIX path, a Windows path
-and an Android `/saf/<token>/…` virtual path.
+## The shared renderer
 
-The renderer never talks to the backend directly. It calls `window.markreader`, which
-`src/bridge/bridge.ts` implements with `invoke()` and `listen()` — one method per command, and
-the event channel names (`document:opened`, `document:changed`, `folder:opened`,
-`command:*`) are the same strings the backend emits.
+The renderer is a shared component. This app is one host for it. Other apps are hosts too, so
+a change to the document module changes every host.
 
-## What was cut from the VS Code original
+- `document.ts` owns the reading surface. It touches no DOM outside its root. It reaches the
+  host only through `DocumentHost` (`host.ts`).
+- `shell.ts` owns the desktop chrome. It uses the document only through `DocumentView`.
+- Paths are opaque to the renderer. The host decides what a path means. See `host.ts`.
+- Only `src/bridge/bridge.ts` talks to Tauri. The renderer calls `window.markreader`.
+- Styles for what `document.ts` draws go in the document stylesheets, not `app.css`.
 
-`markdownEngine.ts` had five couplings to the extension host. Each was replaced:
+## Two builds
 
-| VS Code dependency | Replacement |
-| --- | --- |
-| `vscode.Uri` | Plain absolute path strings |
-| `MarkdownPreviewConfiguration.getForResource()` | `config.ts` |
-| `vscode.env.uriScheme`, `vscode:` link normalization | Removed |
-| `vscode.workspace.getWorkspaceFolder()` | `RenderContext.rootPath` |
-| `MarkdownContributionProvider` | A plain array of markdown-it plugins |
+| Command | Output | Used by |
+| --- | --- | --- |
+| `npm run build` | One esbuild bundle in `out/renderer/` | Tauri, which embeds it in the binary |
+| `npm run build:esm` | ES modules and vendored libraries in `out/renderer-esm/` | Other hosts |
 
-Dropped wholesale, because they only mean something inside the editor:
-`preview.ts`, `previewManager.ts`, `markdownEditorProvider.ts` (webview panel lifecycle and
-editor↔preview scroll sync), `preview-src/index.ts` (built on `acquireVsCodeApi()`),
-`security.ts` (webview CSP trust levels), and `lineDiff.ts` / `renderedDiffWarning.ts`
-(the diff-preview feature).
+Both come from the same source, so a "works bundled, breaks unbundled" bug shows here. The
+steps and traps are in `scripts/build-esm.mjs`.
 
-`documentRenderer.ts` shrank to `index.html`: most of it was CSP nonces and
-`asWebviewUri()` rewriting. The `.markdown-body` wrapper it emitted is kept, because
-`markdown.css` targets it.
+Three checks guard the shared module:
 
-## Deviations from the original migration plan
+- `npm run verify:esm`: the unbundled build loads and renders a document.
+- The stub host (`test/stub-host.*`): the document module renders with no desktop shell.
+- `vendored-files.test.ts`: styles for what `document.ts` draws are in a document stylesheet.
 
-- `tauri-plugin-opener` instead of `tauri-plugin-shell` — it has `reveal_item_in_dir`, the
-  `showItemInFolder` equivalent.
-- `RunEvent::Opened` instead of `tauri-plugin-deep-link` for the macOS open-file case —
-  deep-link handles URL schemes, not file associations.
-- An in-app `--smoke` harness instead of `tauri-driver` for the tests — which also means the
-  suite writes no screenshots, since the webview cannot capture its own window.
+## Differences from VS Code
 
-## The `mdr://` protocol
+Removed, because they only work inside the editor: the webview panel lifecycle, editor scroll
+sync, preview security levels and diff preview. `markdownEngine.ts` now uses plain path strings
+and `config.ts` instead of `vscode.Uri` and `MarkdownPreviewConfiguration`.
 
-VS Code rewrites local image and link references to webview URIs via
-`resourceProvider.asWebviewUri()`. MarkReader rewrites them to a custom `mdr://` scheme that
-`src-tauri/src/protocol.rs` serves from disk.
+Added:
 
-The alternative — loading the page over `file://` and setting `<base href>` to the
-document's folder — would also redirect the app shell's own relative asset paths, so the
-custom scheme is used instead.
-
-WebView2 supports no non-standard schemes, so on Windows the runtime maps
-`mdr://localhost/<path>` onto `http://mdr.localhost/<path>` and intercepts that instead;
-`asLocalResourceUri()` in `util.ts` emits whichever form the platform needs, and the Rust
-handler accepts both. This is also why the page's CSP lists `http://mdr.localhost`.
-
-The handler serves only from `ResourceRoots`: the directory of the window's *active*
-document, and the opened folder when there is one. Roots are kept per window and looked up by
-the label of the webview making the request, so one window's documents cannot read beside
-another's, and an unknown webview gets nothing. The renderer reports which documents are open
-and which is active with `sync_documents`; a document open but not showing is watched for saves
-but is not a root. Both are canonicalized, so neither a `..` segment nor a
-symlink reaches outside them, and anything else gets a 404 — the same answer as a file that
-does not exist, so a document cannot probe for what is there.
-
-It used to serve any file the user could read, which was a defensible trade for a local reader
-and is not one any more: the page renders untrusted document HTML, and `img-src` has to allow
-`https:` for documents that legitimately reference remote images. Those two together are a
-read-anything-and-beacon-it-out channel. This is the same scoping VS Code applies with
-`localResourceRoots` on the webview the preview came from.
-
-The visible cost: a document that references an image *above* its own folder, with no folder
-open, no longer loads it. Open the containing folder and it works.
+- Task lists render as checkboxes. This is the only intentional rendering difference.
+- Outline, find bar, file sidebar and code-block copy buttons. In VS Code, the workbench
+  supplies these.
 
 ## Security
 
-The page executes untrusted content — `markdown-it` runs with `html: true`, because a Markdown
-reader that drops raw HTML is not much of one. Four layers, none of which is sufficient alone:
+The page renders untrusted HTML (`markdown-it` with `html: true`). No layer is sufficient
+alone:
 
 | Layer | Where | Stops |
 | --- | --- | --- |
-| CSP | `tauri.conf.json` (header) and `index.html` (meta) | Inline handlers and injected scripts — `script-src 'self'` with no `'unsafe-inline'` |
-| Sanitizer | `renderer/sanitizer.ts`, the only place document HTML enters the DOM | Scripts, frames, forms, document stylesheets, `javascript:` URLs |
-| Resource roots | `protocol.rs` | Reads outside the open document's folder |
-| Scheme allowlist | `commands.rs`, `is_openable_external` | Handing anything but `http`/`https`/`mailto` to the OS |
+| CSP | `tauri.conf.json`, `index.html` | Inline and injected scripts |
+| Sanitizer | `sanitizer.ts` | Scripts, frames, forms, document stylesheets, `javascript:` URLs |
+| Resource roots | `protocol.rs` | Reads outside the active document's folder and the open folder |
+| Scheme allowlist | `commands.rs` | Opening anything except `http`, `https` and `mailto` |
 
-Two notes for anyone changing this. The sanitizer drops any attribute whose value contains
-`-->` (DOMPurify's mXSS defence, no opt-out) — which is why the mermaid diagram source travels
-as element text rather than an attribute. And `style` attributes stay allowed, because KaTeX
-lays out its output with them; `<style>` elements do not.
+The resource roots matter because `img-src` allows `https:`. Without them, a document could
+read any local file and send it out in an image URL.
 
-## Settings
+## Settings and session
 
-Settings live in `settings.json` in the platform config directory: `%APPDATA%/com.markreader.desktop`
-on Windows, `~/.config/com.markreader.desktop` on Linux, and
-`~/Library/Application Support/com.markreader.desktop` on macOS. It is written on every change and
-is meant to be hand-editable — `fontSize`, `lineHeight`, `fontFamily` and the KaTeX
-`mathMacros` table have no menu item and can only be set there.
-
-The renderer still owns the shape of the configuration, and still does not know where it ends up:
-
-- `src-tauri/src/settings.rs` reads the file at start-up and hands the JSON to the webview as an
-  initialization script, which runs before any page script. That is what lets the renderer apply
-  the stored theme on its first paint; an `invoke()` would mean painting the default theme and
-  correcting it a round-trip later, visibly, on every launch.
-- `bridge.ts` takes that global off `window` and exposes it as `api.settings`, alongside
-  `api.saveSettings()`.
-- `config.ts` validates it. `parseConfig()` has one validator per setting and drops anything it
-  does not recognize or cannot use, so a hand-edited or stale file costs only the entries that
-  are actually wrong. `onConfigChanged()` is the hook the host saves from — nothing else in the
-  renderer uses it.
-
-The open tabs are kept the same way, in `session.json` beside it (`session.rs`, injected as
-`__MARKREADER_SESSION__`). The renderer owns that shape too — it is `TabsModel.serialize()` —
-and validates it with `TabsModel.restore()`. The backend knows one thing about it, that it has
-`tabs[].path`, so it can report which of those files are gone: the renderer cannot ask without
-an error dialog per missing file. Only the active tab is read at start-up; the others are read
-when first activated. Writes are coalesced while the reader scrolls, and flushed on `pagehide`.
-`"restoreSession": false` in `settings.json` turns restoring off.
-
-An unreadable or malformed file reads as "nothing stored", never as an error. Writes go through
-a temp file and a rename, so a crash part-way through one cannot leave a truncated file behind
-for the next launch to read.
-
-A `--smoke` run is redirected to a settings file in the suite's scratch directory (`test/tmp`),
-which the runner wipes first. The suite therefore exercises the real load and save path without
-reading, or overwriting, the developer's own settings.
-
-## Theming
-
-`markdown.css` and `highlight.css` are unmodified, so they expect the `--vscode-*` custom
-properties the workbench injects, plus a `vscode-light` / `vscode-dark` class on the body.
-`theme.css` supplies both, with values from Default Dark Modern and Default Light Modern.
-`highlight.css` already ships light overrides under a `.vscode-light` prefix, so code
-highlighting switches themes for free.
-
-The renderer owns the theme decision and tells the backend which colour to paint the window
-with (`set_window_background`), so resizing never flashes white behind the page.
-
-## Deliberate differences from VS Code
-
-- **Task lists render as checkboxes.** VS Code's preview has no task-list plugin, so it shows
-  the literal text `[x]`. That reads as broken in a standalone reader, so `plugins.ts` adds
-  one. This is the only rendering behaviour that intentionally diverges.
-- **Outline, find bar, file sidebar, and code-block copy buttons** are additions; VS Code gets
-  those from the surrounding workbench.
-- **No editor scroll sync**, no preview security levels, no diff preview.
-
-## Known limitations
-
-- `markdown.css` still contains the diff-preview rules, since it's copied verbatim. They never
-  match, because no diff markup is emitted. Kept unmodified so the file stays diffable against
-  upstream.
-- **Nothing heavy is loaded until a document needs it.** mermaid, highlight.js and KaTeX are
-  all lazy chunks, and KaTeX's 1.4MB stylesheet is injected on demand rather than linked in
-  the page. `lazy.ts` decides from the document text, *before* the render, so a document is
-  painted once and complete instead of reflowing as modules arrive. That took the entry bundle
-  from 1.6MB to 598KB.
-
-  Detection deliberately errs towards loading: any `$` counts as math. A module loaded
-  needlessly renders exactly as before, whereas a missed one renders `$x^2$` as text.
-- `highlight.ts` registers an explicit list of 55 languages on the highlight.js core instead of
-  importing all ~190. Adding a language means adding a line there.
-- The tests take no screenshots. The webview cannot capture its own window, so visual review
-  means running the app and using the OS screenshot tool.
-
-## The unbundled build
-
-`npm run build` produces the bundle Tauri ships. `npm run build:esm` produces the artifact a
-non-Tauri host such as an Android WebView would load: **our code as plain ES modules, libraries
-as vendored single files.** The point of having both is that they are the same source — "works
-bundled, breaks unbundled" is a whole class of bug, and it is one we would otherwise meet on a
-device.
-
-```
-out/renderer-esm/
-  document.js  engine.js  shell.js  …   13 modules, 92kb, unminified, 1:1 with the source
-  vendor/                               6 libraries, minified, self-contained
-  css/                                  the document stylesheets, plus katex.css
-  stub.html  stub.js  samples/          the stub host and something for it to render
-```
-
-`scripts/build-esm.mjs` does three things: `tsc` emits our code one file in, one file out; each
-library is prebuilt into one ESM file; then a rewrite pass points every import at a real file —
-adding the `.js` extension `tsc` omits, and swapping bare specifiers for vendored paths. Source
-keeps the upstream specifier, so the ported VS Code files stay diffable.
-
-Libraries are *built*, not copied, because almost none ship something a browser loads directly:
-`@vscode/markdown-it-katex` is CommonJS only, and `highlight.js`'s `es/` entry points re-export
-its CommonJS. Two traps worth knowing:
-
-- Building the KaTeX plugin with `katex` marked external leaves a `__require("katex")` shim
-  whose body throws. It builds clean and fails at the first document with math. KaTeX has to be
-  baked in, which is why that file is 269kb.
-- Flattening mermaid loses its internal lazy loading of diagram types. Acceptable here because
-  the whole of mermaid is already behind one dynamic `import()`, but it is why it is 3.4MB
-  rather than the 2.7MB budgeted for it.
-
-`npm run verify:esm` checks the result: every import resolves, no bare specifiers survive, no
-throwing shims, and — under jsdom — the modules actually execute and render a document.
-
-`npm run serve:esm` then `http://localhost:8099/stub.html` opens the stub host: a bare page
-with no `app.css` and no `shell.ts`. If the document module renders there it will render in a
-WebView, because that page gives it strictly less than one. It is also the regression test for
-shell coupling — the moment `document.ts` reaches for an element only the desktop chrome has,
-the stub breaks and the app does not.
-
-**A stylesheet can couple the same way, and the stub will not tell you.** A rule for something
-`document.ts` draws, left in `app.css`, renders on desktop and silently does not on a host that
-loads only the document stylesheets — the find highlights were exactly that, and a custom
-highlight with no `::highlight()` rule for its name paints nothing and throws nothing. There is
-no visual assertion to catch it, so `vendored-files.test.ts` checks the one case that fails
-invisibly: every name passed to `CSS.highlights.set()` has a rule in a document stylesheet.
-
-## Notes on the build
-
-- **The two frontend builds are wired into Tauri, not run by hand.** `tauri.conf.json` sets
-  `beforeDevCommand: "npm run build"` (dev, with sourcemaps) and
-  `beforeBuildCommand: "npm run build:prod"` (minified). So `npm start`/`tauri dev` compiles
-  the frontend for you, and every `tauri build` — including `package:dir` and the CI/release
-  installers — silently produces the minified bundle first. Only run `npm run build` manually
-  if you want the dev output outside of Tauri's lifecycle.
-- **Frontend dependencies live in `devDependencies`.** esbuild inlines markdown-it, KaTeX,
-  mermaid and highlight.js into `out/renderer`, which `tauri build` then embeds in the binary;
-  nothing is needed at runtime.
-- **The executable is unsigned.** Windows SmartScreen will show an "unrecognized app" warning
-  on first run — *More info* → *Run anyway*. Removing that needs a paid code-signing
-  certificate; set `bundle.windows.certificateThumbprint` once you have one.
-- **The icon** comes from `build/icon.svg`: `npm run icon` rasterizes it into the whole
-  `src-tauri/icons/` set, including the `.ico` the installer and window use.
-- **Smart App Control**, if enforced, refuses to run build scripts or load proc-macro DLLs
-  written under `%USERPROFILE%\Documents`, and cargo fails with *"An Application Control policy
-  has blocked this file"* (CodeIntegrity event 3033 / os error 4551). The workaround is a local
-  `src-tauri/.cargo/config.toml` with `[build] target-dir` pointing outside that folder. See
-  `KNOWN_ISSUES.md` §2. The test scripts never hardcode the target path: `verify-packaged.mjs`
-  and the `markreader` npm bin shim resolve it via `cargo metadata`.
+The backend stores `settings.json` and `session.json` in the platform config directory. It
+injects both before page scripts run, so the first paint uses the stored theme. The renderer
+owns both shapes and validates them (`config.ts`, `tabs/model.ts`). Users can edit
+`settings.json` by hand. Some settings, such as `fontSize` and `mathMacros`, exist only there.

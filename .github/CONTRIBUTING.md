@@ -1,168 +1,124 @@
 # Contributing
 
-Thanks for wanting to help with MarkReader. This project follows standard open-source
-practices: Conventional Commits, PR-based contributions, and a release pipeline in CI.
-
-Taking part means following the [Code of Conduct](CODE_OF_CONDUCT.md).
+Follow the [Code of Conduct](CODE_OF_CONDUCT.md). Read [ARCHITECTURE.md](../docs/ARCHITECTURE.md)
+before you change the renderer.
 
 ## Setup
 
-Prerequisites:
+Install:
 
-- Node.js 22.22+ or 24+ (with npm) — CI builds and tests on 24
+- Node.js 22.22+ or 24+ (CI uses 24)
 - The Rust toolchain (`rustup`)
-- On Windows: the MSVC build tools and the WebView2 runtime — `npx tauri info` checks all three
-- On Linux: the [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/)
-  (WebKitGTK 4.1, etc.) and `xvfb` for headless test runs
+- Windows: the MSVC build tools and the WebView2 runtime. `npx tauri info` checks them.
+- Linux: the [Tauri v2 system dependencies](https://v2.tauri.app/start/prerequisites/), and
+  `xvfb` for headless tests
 
 ```bash
 npm install
-npm start              # build the frontend, then launch the app (tauri dev)
+npm start                                  # builds the frontend and runs the app
+npm start -- -- -- ../samples/kitchen-sink.md   # opens a file (paths resolve from src-tauri/)
+npm run watch                              # rebuilds the frontend on change
 ```
 
-## Project layout
+Close any running MarkReader first. A second launch sends its file to the open window.
 
-| Path | What it is |
+To open files from a terminal, run `npm link` once, then `markreader notes.md`.
+
+If cargo fails with *"An Application Control policy has blocked this file"*, see
+[KNOWN_ISSUES.md](../docs/KNOWN_ISSUES.md#smart-app-control-blocks-cargo-builds-under-the-user-profile).
+
+## Checks
+
+Run these before you open a PR:
+
+```bash
+npm run typecheck
+npm run lint
+npm run test:unit                          # renderer unit tests, no webview
+npm test                                   # builds, then runs the in-app smoke suite
+npm run check:version
+```
+
+Also run these when you change:
+
+| Change | Command | Notes |
+| --- | --- | --- |
+| `src/renderer/` | `npm run build:esm && npm run verify:esm` | CI does not run this. To see the stub host, run `npm run serve:esm` and open `http://localhost:8099/stub.html` |
+| The backend or packaging | `npm run package:dir && npm run verify:packaged` | Runs the suite against a release binary |
+| Visible UI | `npm run screenshots` | Windows only. Updates `metadata/screenshots/`. Do not touch the window while it runs |
+| `build/icon.svg` | `npm run icon` | Regenerates `src-tauri/icons/` |
+
+## Writing docs and comments
+
+Keep docs few and short.
+
+- Put a fact next to the code it describes, in that file's comment. Use a doc only for facts
+  that span files.
+- Write each fact once. Link to it from other places.
+- Say what the code does and why. Do not write history, changing numbers or line numbers.
+- When you change code, update or delete the text that describes it.
+- Use short sentences, the active voice, and one term for one thing
+  ([ASD-STE100](https://www.asd-ste100.org) writing rules).
+- Write steps as commands. Use lists and tables, not long paragraphs.
+
+| Content | Place |
 | --- | --- |
-| `src-tauri/` | The Rust backend (window, protocol, watcher, menu) |
-| `src/renderer/` | The document view (browser-side, no backend access) |
-| `src/bridge/` | The `window.markreader` bridge between them |
-| `test/` | The smoke test suite and its harness |
-| `scripts/` | Version-check and screenshot scripts |
-| `metadata/` | Store-style listing: AppStream metainfo, screenshots, and the demo docs they show |
+| How the parts fit together | `docs/ARCHITECTURE.md` |
+| A platform problem: symptom, cause, fix | `docs/KNOWN_ISSUES.md` |
+| A procedure | `.github/CONTRIBUTING.md` |
+| Rules for coding agents | `AGENTS.md` |
 
-See [ARCHITECTURE.md](../docs/ARCHITECTURE.md) for details.
+## Pull requests
 
-## Development workflow
-
-- **Frontend** — `npm run build` (dev, with sourcemaps) or `npm run watch` for rebuild-on-change.
-- **Backend** — lives in `src-tauri/`; `npm start` rebuilds and runs it.
-- **Open a document in a dev run** — pass the path after the argument separators. `tauri dev`
-  runs from `src-tauri/`, so a relative path resolves from there:
-
-  ```bash
-  npm start -- -- -- ../samples/kitchen-sink.md
-  ```
-
-  A second launch hands its file to the window already open, so close any running
-  `markreader` first (see [KNOWN_ISSUES.md](../docs/KNOWN_ISSUES.md)).
-- **Open documents from a terminal** — `bin/markreader.js` is a cross-platform shim that
-  finds a local build (or an installed copy) and passes it the file:
-
-  ```bash
-  npm link               # once, from the project root
-  markreader notes.md    # relative to your current directory
-  ```
-
-## Checks before opening a PR
-
-Run all of these locally — CI enforces the same:
-
-```bash
-npm run typecheck        # tsc --noEmit
-npm run lint             # oxlint (frontend + scripts)
-npm run test:unit        # fast, headless renderer unit tests
-npm test                 # launch the app and assert against the live DOM
-npm run check:version    # all version files in sync
-```
-
-- `npm run test:unit` runs the renderer's pure logic (engine, slugify, paths, util) against
-  vitest in Node — no webview needed.
-- `npm test` builds the frontend first, then runs the in-app smoke suite (assertions
-  covering front matter, slugs, highlighting, math, mermaid, image loading, outline, find,
-  theming, the folder sidebar, and live reload).
-- `npm run verify:packaged` re-runs the whole suite against a release binary — do this after
-  `npm run package:dir` if your change touches packaging or the backend.
-
-## Screenshots
-
-The README and the AppStream metainfo share one set of screenshots in `metadata/screenshots/`.
-Regenerate them after a visible UI change (Windows only, ~1 minute):
-
-```bash
-npm run screenshots
-```
-
-It opens `metadata/demo/` in the app, steps through the scenes in
-`scripts/screenshots/scenes.js` in both themes, and captures the window for each. Close any
-running MarkReader first, and leave the window alone while it runs.
-
-## Committing
-
-- PR titles must follow [Conventional Commits](https://www.conventionalcommits.org):
-  `feat:`, `fix:`, `docs:`, `refactor:`, `perf:`, `test:`, `build:`, `ci:`, `chore:`,
-  `revert:`, `style:`.
-- The PR title becomes the squashed commit on `main` and feeds the auto-generated release
-  notes, so make it descriptive.
-- CI auto-labels PRs by their title type; the label drives the release-note grouping.
+PR titles use [Conventional Commits](https://www.conventionalcommits.org) (`feat:`, `fix:`,
+`docs:`, `refactor:`, `perf:`, `test:`, `build:`, `ci:`, `chore:`, `revert:`, `style:`). The
+title becomes the squashed commit on `main`, and its type sets the release-note label.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and push to `main`. The OS-independent checks
-(version sync, typecheck, lint, frontend unit tests) run once on Linux. Alongside them, a
-matrix across Windows, Linux, and macOS runs clippy, `cargo test` and the DOM smoke suite,
-then builds the installers and verifies the packaged app. All actions are SHA-pinned with
-`permissions: contents: read`.
+`.github/workflows/ci.yml` runs on every PR and every push to `main`. A push to `main` runs
+everything. The `Detect changes` job decides what a PR runs:
 
-A push to `main` always runs all of it. A PR runs only what its changes need, decided by the
-first job, `Detect changes`:
+| PR changes | CI runs |
+| --- | --- |
+| Docs only | Nothing |
+| Code | Static checks, and the smoke suite on Windows, Linux and macOS |
+| Packaging inputs | The above, and the installers |
 
-- **Docs only** (`docs/`, top-level `*.md`, `.github/*.md`, screenshots): nothing is built.
-- **Code**: the static checks and the test matrix, without packaging.
-- **Packaging inputs** (`tauri.conf.json`, `Cargo.*`, `build.rs`, icons, capabilities,
-  `package*.json`, `build.mjs`, the metainfo, the workflows): the installers as well.
+When you add a file that changes the package, add it to the patterns in `Detect changes`.
 
-The patterns live in that job; when adding a file that changes what gets packaged, add it
-there too.
+`main` requires two checks: `Test, lint & build` and `Conventional Commit title`. If you rename
+either one, update the branch ruleset.
 
-A final `Test, lint & build` job passes only when every job above succeeded or was
-deliberately skipped. That job and
-`Conventional Commit title` are the two checks `main` requires before a PR can merge, so
-renaming either one means updating the branch ruleset too.
+## Release
 
-## Release process
-
-Releases are tag-driven — pushing `vX.Y.Z` triggers `.github/workflows/release.yml`, which:
-
-1. Guards: tag matches `package.json` version, all version files are in sync, tree is clean.
-2. Re-tests the tagged commit, builds the Windows and Linux installers, and uploads them.
-3. Creates a GitHub Release with auto-generated notes grouped by label.
-
-The version bump goes through a PR like any other change, since `main` only accepts merges
-that pass the required checks. The tag goes on `main` after that PR merges.
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It checks the versions, re-tests,
+builds the Windows and Linux installers, and creates a GitHub Release. The release notes come
+from PR labels, so `CHANGELOG.md` is the only release text you write.
 
 ```bash
-# 1. Start from an up-to-date main with a clean tree
+# 1. Branch from an up-to-date main
 git checkout main && git pull origin main
 git checkout -b release/v0.1.1
 
-# 2. Set "version" in package.json (the source of truth), then copy it everywhere else.
-#    --fix can't write Cargo.lock and says so; the cargo command regenerates it.
+# 2. Set "version" in package.json, then copy it to the other files
 npm run check:version -- --fix
-(cd src-tauri && cargo update -p markreader)
+(cd src-tauri && cargo update -p markreader)   # --fix cannot update Cargo.lock
+npm run check:version                          # must print "All versions match"
 
-# 3. Verify — must print "All versions match"
-npm run check:version
+# 3. Add the version to the top of CHANGELOG.md, and add
+#    <release version="0.1.1" date="YYYY-MM-DD"/> first inside <releases> in
+#    metadata/com.markreader.desktop.metainfo.xml
 
-# 4. Add the new version's entry at the top of CHANGELOG.md, and a matching
-#    <release version="0.1.1" date="YYYY-MM-DD"/> as the first line inside <releases> in
-#    metadata/com.markreader.desktop.metainfo.xml (newest first)
-
-# 5. Commit only the release files, push, and open a PR titled "chore(release): v0.1.1"
+# 4. Commit the release files and open a PR titled "chore(release): v0.1.1"
 git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock \
         src-tauri/tauri.conf.json CHANGELOG.md metadata/com.markreader.desktop.metainfo.xml
 git commit -m "chore(release): v0.1.1"
 git push -u origin release/v0.1.1
 
-# 6. After the PR merges, tag main — pushing the tag starts the release workflow
+# 5. After the PR merges, tag main
 git checkout main && git pull origin main
 npm run check:version
 git tag -a v0.1.1 -m "Release v0.1.1"
 git push origin v0.1.1
 ```
-
-GitHub Release notes are generated from PR labels (`.github/release.yml`), so `CHANGELOG.md`
-is the only release text to write by hand.
-
-> Note: there is no separate `versionCode` to bump — this is not an Android project — so the
-> version-sync check takes that role.
