@@ -43,12 +43,12 @@
 		"linux": {
 			"deb": {
 				"files": {
-					"/usr/share/metainfo/com.markreader.desktop.metainfo.xml": "../metadata/com.markreader.desktop.metainfo.xml"
+					"/usr/share/metainfo/io.github.usamaiqb.markreader-desktop.metainfo.xml": "../metadata/io.github.usamaiqb.markreader-desktop.metainfo.xml"
 				}
 			},
 			"appimage": {
 				"files": {
-					"/usr/share/metainfo/com.markreader.desktop.metainfo.xml": "../metadata/com.markreader.desktop.metainfo.xml"
+					"/usr/share/metainfo/io.github.usamaiqb.markreader-desktop.metainfo.xml": "../metadata/io.github.usamaiqb.markreader-desktop.metainfo.xml"
 				}
 			}
 		},

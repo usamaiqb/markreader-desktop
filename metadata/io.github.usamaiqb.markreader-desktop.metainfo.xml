@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- AppStream metadata, read by software centres (GNOME Software, KDE Discover) and Flathub.
      Installed to /usr/share/metainfo/ by the deb and AppImage bundles; see tauri.conf.json.
-     Add a <release> entry for every tagged version. -->
+     Add a <release> entry for every tagged version.
+     The <id> is the Flathub app ID. It differs from "identifier" in tauri.conf.json on purpose:
+     that one names the settings directory, so changing it would reset users' settings and tabs. -->
 <component type="desktop-application">
-  <id>com.markreader.desktop</id>
+  <id>io.github.usamaiqb.markreader-desktop</id>
   <launchable type="desktop-id">MarkReader.desktop</launchable>
 
   <name>MarkReader</name>
   <summary>Read Markdown exactly as VS Code previews it</summary>
-  <developer id="com.markreader">
+  <developer id="io.github.usamaiqb">
     <name>DigiGate</name>
   </developer>
 
