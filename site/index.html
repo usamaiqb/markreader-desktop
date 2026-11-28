@@ -1,0 +1,346 @@
+<!doctype html>
+<!-- The landing page. .github/workflows/pages.yml deploys it to GitHub Pages and copies in
+     icon.png and screenshots/ from src-tauri/icons and metadata/screenshots. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MarkReader: a desktop Markdown reader that renders like VS Code</title>
+<meta name="description" content="MarkReader is a fast, free desktop Markdown reader for Windows and Linux. It renders .md files exactly like VS Code's preview, with Mermaid, KaTeX and syntax highlighting. About 5 MB, no telemetry.">
+<link rel="canonical" href="https://usamaiqb.github.io/markreader-desktop/">
+<link rel="icon" type="image/png" href="icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="MarkReader: read Markdown exactly as VS Code previews it">
+<meta property="og:description" content="A fast, free desktop Markdown reader for Windows and Linux. About 5 MB, no telemetry.">
+<meta property="og:url" content="https://usamaiqb.github.io/markreader-desktop/">
+<meta property="og:image" content="https://usamaiqb.github.io/markreader-desktop/screenshots/01-main-light.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f6f7f9;
+    --text: #1f2328;
+    --muted: #59636e;
+    --border: #d9dee3;
+    /* The brand green, from the Android app's palette (seed #306A42) and the icon arrow. */
+    --accent: #306a42;
+    --accent-hover: #16512c;
+    --accent-text: #ffffff;
+    --code-bg: #eef1f4;
+    --shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 12px 40px rgb(0 0 0 / 10%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c;
+      --bg-soft: #1d2025;
+      --text: #e6e8eb;
+      --muted: #9aa3ad;
+      --border: #30353c;
+      --accent: #98d5a4;
+      --accent-hover: #b3f1bf;
+      --accent-text: #00391a;
+      --code-bg: #24282e;
+      --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 40px rgb(0 0 0 / 45%);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Ubuntu", "Cantarell", sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font: 0.9em ui-monospace, "Cascadia Mono", "Consolas", "DejaVu Sans Mono", monospace;
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  header .wrap {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 600; font-size: 18px; }
+  .brand:hover { text-decoration: none; }
+  .brand img { width: 28px; height: 28px; border-radius: 6px; }
+  header nav { display: flex; gap: 22px; font-size: 15px; }
+  header nav a { color: var(--muted); }
+  header nav a:hover { color: var(--text); text-decoration: none; }
+
+  .hero { text-align: center; padding-top: 56px; }
+  .hero h1 {
+    font-size: clamp(32px, 5.2vw, 54px);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 auto 18px;
+    max-width: 16ch;
+  }
+  .hero .lede { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 40em; margin: 0 auto 32px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 22px; border-radius: 8px;
+    font-weight: 600; font-size: 16px;
+    border: 1px solid var(--border); color: var(--text); background: var(--bg);
+  }
+  .btn:hover { text-decoration: none; border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+  .meta { margin: 16px 0 0; font-size: 14px; color: var(--muted); }
+  .meta a { color: inherit; text-decoration: underline; }
+
+  .shot { margin: 48px auto 0; max-width: 1000px; }
+  .shot img {
+    display: block; width: 100%; height: auto;
+    border-radius: 10px; border: 1px solid var(--border); box-shadow: var(--shadow);
+  }
+
+  section { padding: 88px 0 0; }
+  section h2 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -0.01em; line-height: 1.2; margin: 0 0 12px; }
+  section .sub { color: var(--muted); margin: 0 0 36px; max-width: 40em; }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .feature { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 10px; padding: 22px 22px 18px; }
+  .feature h3 { font-size: 17px; margin: 0 0 6px; }
+  .feature p { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+  .split { display: grid; grid-template-columns: 1fr 1.5fr; gap: 48px; align-items: center; }
+  .split .shot { margin: 0; }
+  @media (max-width: 820px) { .split { grid-template-columns: 1fr; gap: 28px; } }
+
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .steps li { display: flex; gap: 12px; }
+  .steps b { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: var(--code-bg); }
+
+  .table { width: 100%; border-collapse: collapse; font-size: 15.5px; }
+  .table th, .table td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .table th { font-weight: 600; white-space: nowrap; }
+  .table td code { word-break: break-all; }
+
+  .final { text-align: center; padding-top: 96px; }
+  .final h2 { margin-bottom: 24px; }
+
+  footer { margin-top: 96px; border-top: 1px solid var(--border); padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+  footer a { color: inherit; text-decoration: underline; }
+
+  @media (max-width: 560px) {
+    header nav a.hide-sm { display: none; }
+    .hero { padding-top: 32px; }
+    .btn { width: 100%; justify-content: center; }
+    section { padding-top: 64px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="./"><img src="icon.png" alt="" width="28" height="28">MarkReader</a>
+    <nav>
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#download">Download</a>
+      <a href="https://github.com/usamaiqb/markreader-desktop">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero wrap">
+    <h1>Read Markdown exactly as VS Code previews it</h1>
+    <p class="lede">MarkReader is a fast, free desktop reader for <code>.md</code> files. Double-click a file and it opens with VS Code's preview styles, Mermaid diagrams and math. You don't need an editor.</p>
+    <div class="cta" id="cta">
+      <a class="btn primary" id="dl-primary" href="https://github.com/usamaiqb/markreader-desktop/releases/latest">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.17l3.59-3.58L18 11l-6 6-6-6 1.41-1.41L11 13.17V3zM5 19h14v2H5z"/></svg>
+        <span>Download</span>
+      </a>
+      <a class="btn" href="https://github.com/usamaiqb/markreader-desktop">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.3 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></svg>
+        <span>View source</span>
+      </a>
+    </div>
+    <p class="meta" id="dl-meta">For Windows and Linux · About 5 MB · Free and open source (GPL-3.0)</p>
+
+    <div class="shot">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="screenshots/01-main-dark.png">
+        <img src="screenshots/01-main-light.png" width="2240" height="1400" alt="MarkReader with a folder of notes: the file list on the left, a rendered document with a table, a task list and a flowchart in the middle, and the outline on the right">
+      </picture>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>Made for reading, not editing</h2>
+      <p class="sub">Use it for READMEs, docs folders, notes and AI-written reports: anything you want to read without opening an IDE.</p>
+      <div class="features">
+        <div class="feature">
+          <h3>Looks like VS Code's preview</h3>
+          <p>It uses the same stylesheets and markdown-it setup, so a document looks the same in MarkReader as in VS Code.</p>
+        </div>
+        <div class="feature">
+          <h3>Diagrams, math and code</h3>
+          <p>GitHub tables and task lists, Mermaid diagrams, KaTeX math and syntax highlighting for the common languages.</p>
+        </div>
+        <div class="feature">
+          <h3>Live reload</h3>
+          <p>Save the file in any editor, and the view updates without losing your scroll position.</p>
+        </div>
+        <div class="feature">
+          <h3>Tabs and folders</h3>
+          <p>Open a folder to browse its Markdown files in a sidebar. Your tabs come back on the next launch.</p>
+        </div>
+        <div class="feature">
+          <h3>Outline and find</h3>
+          <p>Jump between headings in the outline pane. Search the document with <code>Ctrl+F</code>.</p>
+        </div>
+        <div class="feature">
+          <h3>Small and private</h3>
+          <p>A native Tauri app of about 5 MB. It runs offline and has no telemetry and no account.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div>
+        <h2>Technical documents render correctly</h2>
+        <p class="sub">Flowcharts, sequence diagrams, equations and highlighted code all render, just like in VS Code. Light and dark themes follow your OS.</p>
+      </div>
+      <div class="shot">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="screenshots/02-rendering-dark.png">
+          <img src="screenshots/02-rendering-light.png" width="2240" height="1400" loading="lazy" alt="A Mermaid flowchart, KaTeX equations and syntax-highlighted Rust code rendered in MarkReader">
+        </picture>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div>
+        <h2>Open files from anywhere</h2>
+        <p class="sub">MarkReader becomes the default app for <code>.md</code> files. If it is already running, new files open as tabs in the same window.</p>
+      </div>
+      <ol class="steps">
+        <li><b>1</b><span>Double-click any <code>.md</code> or <code>.markdown</code> file.</span></li>
+        <li><b>2</b><span>Drag files or a folder onto the window.</span></li>
+        <li><b>3</b><span>Use <code>Ctrl+O</code> for files and <code>Ctrl+Shift+O</code> for a folder.</span></li>
+        <li><b>4</b><span>Run <code>markreader notes.md</code> from a terminal.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <h2>Download</h2>
+      <p class="sub">All builds come from the <a href="https://github.com/usamaiqb/markreader-desktop/releases/latest">latest GitHub release</a>.</p>
+      <table class="table">
+        <thead><tr><th>Platform</th><th>File</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <th>Windows</th>
+            <td><a data-asset="-setup.exe" href="https://github.com/usamaiqb/markreader-desktop/releases/latest">Installer (.exe)</a></td>
+            <td>The installer is not code-signed yet. If SmartScreen warns you, select <b>More info</b>, then <b>Run anyway</b>.</td>
+          </tr>
+          <tr>
+            <th>Linux</th>
+            <td><a data-asset=".deb" href="https://github.com/usamaiqb/markreader-desktop/releases/latest">Debian/Ubuntu (.deb)</a><br><a data-asset=".AppImage" href="https://github.com/usamaiqb/markreader-desktop/releases/latest">AppImage</a></td>
+            <td>Install the <code>.deb</code> with <code>sudo apt install ./MarkReader_*.deb</code>, or make the AppImage executable and run it.</td>
+          </tr>
+          <tr>
+            <th>macOS</th>
+            <td>Not available yet</td>
+            <td><a href="https://github.com/usamaiqb/markreader-desktop">Watch the repository</a> to hear when it ships.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="code-signing">
+    <div class="wrap">
+      <h2>Code signing policy</h2>
+      <p class="sub">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
+      <table class="table">
+        <tbody>
+          <tr>
+            <th>Committers and reviewers</th>
+            <td><a href="https://github.com/usamaiqb">usamaiqb</a></td>
+          </tr>
+          <tr>
+            <th>Approvers</th>
+            <td><a href="https://github.com/usamaiqb">usamaiqb</a></td>
+          </tr>
+          <tr>
+            <th>Builds</th>
+            <td>GitHub Actions builds every release from the source in this repository. A person approves each signing request.</td>
+          </tr>
+          <tr>
+            <th>Privacy</th>
+            <td>This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. If a document you open references remote images or media, MarkReader loads them from those servers. A link in a document opens in your browser only when you click it.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="final wrap">
+    <h2>Read your next README in MarkReader</h2>
+    <div class="cta">
+      <a class="btn primary" href="#download">Get MarkReader</a>
+      <a class="btn" href="https://github.com/usamaiqb/markreader-desktop">Star on GitHub</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>MarkReader is free software under the GPL-3.0. Parts come from Visual Studio Code (MIT). It is not affiliated with Microsoft.</span>
+    <span><a href="https://github.com/usamaiqb/markreader-desktop">Source</a> · <a href="https://github.com/usamaiqb/markreader-desktop/issues">Issues</a> · <a href="https://github.com/usamaiqb/markreader-desktop/blob/main/CHANGELOG.md">Changelog</a> · <a href="#code-signing">Code signing policy</a></span>
+  </div>
+</footer>
+
+<script>
+  // Point the download links at the latest release's files. The asset names contain the
+  // version, so they come from the GitHub API. If the API fails, the links keep pointing at
+  // the release page.
+  (function () {
+    var ua = navigator.userAgent;
+    var os = /Windows/.test(ua) ? "windows" : /Linux|X11/.test(ua) && !/Android/.test(ua) ? "linux" : /Mac/.test(ua) ? "mac" : "";
+    var primary = document.getElementById("dl-primary");
+    var label = primary.querySelector("span");
+    if (os === "windows") label.textContent = "Download for Windows";
+    if (os === "linux") label.textContent = "Download for Linux";
+    if (os === "mac") { label.textContent = "See the downloads"; primary.href = "#download"; }
+
+    fetch("https://api.github.com/repos/usamaiqb/markreader-desktop/releases/latest")
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (rel) {
+        function find(suffix) {
+          return (rel.assets || []).filter(function (a) { return a.name.slice(-suffix.length) === suffix; })[0];
+        }
+        document.querySelectorAll("[data-asset]").forEach(function (el) {
+          var a = find(el.getAttribute("data-asset"));
+          if (a) el.href = a.browser_download_url;
+        });
+        // Linux gets the release page: the user picks .deb or AppImage there.
+        var win = find("-setup.exe");
+        if (os === "windows" && win) primary.href = win.browser_download_url;
+        if (os === "linux") primary.href = "#download";
+        var meta = document.getElementById("dl-meta");
+        meta.textContent = "Version " + rel.tag_name.replace(/^v/, "") + " · Windows and Linux · About 5 MB · Free and open source (GPL-3.0)";
+      })
+      .catch(function () {});
+  })();
+</script>
+</body>
+</html>
