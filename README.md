@@ -20,7 +20,8 @@
 
 ## Download
 
-Grab the latest installer from the **[Releases page](https://github.com/usamaiqb/markreader-desktop/releases/latest)**.
+Grab the latest installer from the **[Releases page](https://github.com/usamaiqb/markreader-desktop/releases/latest)**,
+or see the [website](https://usamaiqb.github.io/markreader-desktop/).
 
 | Platform | Format                  |
 | -------- | ----------------------- |
@@ -84,6 +85,24 @@ A second launch doesn't start a second app — it hands its files to the running
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [SECURITY.md](.github/SECURITY.md) — how to report a vulnerability
 - [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) — the standards expected of everyone taking part
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+| Role | Members |
+| --- | --- |
+| Committers and reviewers | [usamaiqb](https://github.com/usamaiqb) |
+| Approvers | [usamaiqb](https://github.com/usamaiqb) |
+
+GitHub Actions builds every release from the source in this repository. A person approves each
+signing request.
+
+**Privacy:** This program will not transfer any information to other networked systems unless
+specifically requested by the user or the person installing or operating it. If a document you
+open references remote images or media, MarkReader loads them from those servers. A link in a
+document opens in your browser only when you click it.
 
 ## License
 
