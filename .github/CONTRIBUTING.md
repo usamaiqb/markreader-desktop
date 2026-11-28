@@ -108,11 +108,11 @@ npm run check:version                          # must print "All versions match"
 
 # 3. Add the version to the top of CHANGELOG.md, and add
 #    <release version="0.1.1" date="YYYY-MM-DD"/> first inside <releases> in
-#    metadata/com.markreader.desktop.metainfo.xml
+#    metadata/io.github.usamaiqb.markreader-desktop.metainfo.xml
 
 # 4. Commit the release files and open a PR titled "chore(release): v0.1.1"
 git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock \
-        src-tauri/tauri.conf.json CHANGELOG.md metadata/com.markreader.desktop.metainfo.xml
+        src-tauri/tauri.conf.json CHANGELOG.md metadata/io.github.usamaiqb.markreader-desktop.metainfo.xml
 git commit -m "chore(release): v0.1.1"
 git push -u origin release/v0.1.1
 
